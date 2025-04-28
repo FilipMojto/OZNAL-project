@@ -1,20 +1,421 @@
 ---
-title: "The example project workflow"
-author: "Jan Sliacky"
-date: "`r Sys.Date()`"
+title: "EDA for OZNAL project"
+author: "Filip Remšík, Filip Mojto"
+date: "`r Sys.Date()`" # the date updates automatically when rendered
 output:
   html_document:
-    toc: true
-    toc_float: true
+    toc: true # Adds a table of contents (TOC)
+    toc_float: true # Makes the TOC float on the side
   pdf_document:
     toc: true
 ---
 
 ```{r setup, include=FALSE}
+# A code chunk labeled setup.
+# this chunk will not appear in the final document (no code, no output shown), but it will run
+
+# Sets global options for all subsequent code chunks.
+#echo = TRUE means R code will be displayed in the output (HTML/PDF).
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Company Bankruptcy Prediction - EDA
+
+## Libraries
+
+```{r libs}
+
+library(tidyverse)
+library(conflicted)
+library(corrplot)
+library(purrr)
+library(caret)
+library(nnet)
+library(pROC)
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+
+
+```
+
+## Dataset
+
+### Load
+
 ```{r}
 
-print("dssd")
+paste("Loading dataset from '", getwd(), "'")
+
+df <- read_csv("../data/raw/data.csv", show_col_types = FALSE)
 ```
+
+### View
+
+```{r}
+
+View(df)
+```
+
+## Feature selection
+
+Based on the hypothesis we formulated previously we will select the following features as our potential predictors.
+
+```{r}
+
+TARGET = 'Bankrupt?'
+# indices of predictors
+PREDICTORS = c(2, 3, 4, 5, 6, 7, 8, 9, 10, 24, 25, 26, 27, 28, 29, 30, 31, 32)
+PREDICTOR_NAMES <- names(df)[PREDICTORS]
+cat("Predictors: \n")
+walk(PREDICTOR_NAMES, print)
+
+selected_data <- df %>%
+  select(all_of(PREDICTORS), all_of(TARGET))
+
+selected_data
+
+
+```
+
+## Feature transformation
+
+In this section we will perform some additional preprocessing with data.
+
+This blocks ensures that target is treated as factor so that it is later processed with some plots properly.
+
+```{r}
+
+# target is now treated as factor (required in boxplots for proper binning)
+selected_data[[TARGET]] <- as.factor(selected_data[[TARGET]])
+
+```
+
+## Basic statistics & feature scale
+
+After selecting predictors, we can now examine the dataset a bit more in detail. We will use function *summary()* which displays for each column the following:
+
+1) **Minimum**
+
+2) **1st quartile**
+
+3) **Median**
+
+4) **Mean**
+
+5) **3rd quatle**
+
+6) **Maximum**
+
+From minimum and maximum value we can also deduce the **scale** of every column.
+
+```{r}
+
+summary(selected_data)
+
+```
+
+From the above values we can observe that almost all the features have the same scale ranging from 0 to 1. Only *Total_asset_growth_rate* and *Net Value Growth Rate* are exceptions where maximum reaches billions.
+
+We can also notice the target where **distribution** for each class (0 - not bankrupt and 1 - bankrupt) is **heavily imbalanced**.
+
+From the scale and quartiles we can also see some **skewness** in data. We will examine this more later in this document.
+
+## Missing values
+
+Now we will detect any missing values in the data.
+
+```{r}
+
+nrows <- nrow(df)
+
+
+get_nan_percentage <- function(filter = FALSE) {
+  nans <- df %>%
+    summarise(across(everything(), ~round(sum(is.na(.)) / nrow(df) * 100, 2))) %>%
+    rename_with(~paste0(., "_%"))
+  
+  if (filter) {
+    # Keep only columns where NA percentage > 0
+    nans <- nans %>%
+      select(where(~ . > 0))
+  }
+  
+  return(nans)
+}
+  
+nan_percentage <- get_nan_percentage()
+nan_percentage
+
+nan_cols <- nan_percentage %>%
+  select(where(~ . > 0))
+
+cat("No. of cols with missing values:", ncol(nan_cols))
+
+```
+
+We have **detected no missing values**. Thus, no more action to be taken is required here.
+
+## Outliers
+
+Now we will use plots to visualize outliers in our data. Boxplots are the ideal tool to properly distinguish outliers from the rest of the data.
+
+```{r}
+
+show.boxplot <- function(data, cols, target){
+  plots <- map(cols, ~ggplot(
+    data,
+    aes(x = .data[[target]], y = .data[[.x]])) +
+      geom_boxplot(aes(group = .data[[target]])) +
+      theme_minimal()
+  )
+  
+  walk(plots, print)
+}
+
+selected_data[[TARGET]] <- as.factor(selected_data[[TARGET]])
+
+show.boxplot(data = selected_data, cols = PREDICTOR_NAMES_SHORT, target = TARGET)
+
+```
+
+From the plots above we have concluded that features:
+
+1) *ROA(C)*
+
+2) *ROA(A)*
+
+3) *ROA(B)*
+
+4) *Per Share Net profit before tax*
+
+5) *After-tax Net Profit Growth Rate*
+
+6) *Regular Net Profit Growth Rate*
+
+have substantial portion of outliers which will be needed to be dealt with later in data preprocessing. Some attributes like *Net Value Growth Rate* have low IQR.
+
+## Independence
+
+For most of the classification models, the independence between individual predictors is crucial. This basically means their correlation is not significant. We can visually check that using **corrplot**.
+
+```{r correlation fig.width=15, fig.height=15}
+
+show.corrplot <- function(matrix){
+  p <- corrplot(
+    matrix,
+    method = 'color',
+    type = 'lower',
+    tl.cex = 0.6,        # much smaller axis text
+    cl.cex = 0.6,        # smaller colorbar text
+    addCoef.col = "black",
+    number.cex = 0.5,    # smaller correlation coefficients
+    tl.srt = 45
+  )
+  
+  print(p)
+}
+
+# we need to truncate the predictor names so that the results are displayed
+# better
+cor_matrix <- cor(selected_data[,PREDICTOR_NAMES])
+truncate_labels <- function(labels, max_length = 20) {
+  sapply(labels, function(lab) {
+    if (nchar(lab) > max_length) {
+      paste0(substr(lab, 1, max_length), "…")  # ellipsis
+    } else {
+      lab
+    }
+  })
+}
+
+# applying truncation
+colnames(cor_matrix) <- truncate_labels(colnames(cor_matrix))
+rownames(cor_matrix) <- truncate_labels(rownames(cor_matrix))
+
+show.corrplot(cor_matrix)
+```
+
+After checking the matrix we can see there are some **significant dependence** between attribues like ROA(C), ROA(B), etc.
+
+## Distribution
+
+### Class counts
+
+First we are going to utilize **Histogram** to display the distribution for individual classes.
+
+```{r}
+
+show.histogram <- function(df, cols, target) {
+  
+  plot_list <- map(cols, ~ {
+    ggplot(data = df, aes(x = .data[[.x]], fill = as.factor(.data[[target]]))) + 
+      geom_histogram(position = "identity", alpha = 0.5, bins = 30, color = "black") + 
+      scale_fill_manual(values = c('blue', 'red')) +  # Customize fill colors
+      labs(title = paste("Histogram for", .x), x = .x, y = "Count") + 
+      theme_minimal() + 
+      theme(legend.title = element_blank())
+  })
+  
+  walk(plot_list, print)
+}
+
+# Usage example:
+show.histogram(selected_data, PREDICTOR_NAMES, TARGET)
+```
+
+The histogram only confirmed that class 1 is highly imbalanced across all predictors.
+
+### Density
+
+Now we can replace histogram with **Density Plot** to better catch the distribution shape for each predictor.
+
+```{r}
+show.densityplot <- function(df, cols, target) {
+  
+  plot_list <- map(cols, ~ {
+    ggplot(data = df, aes(x = .data[[.x]], fill = as.factor(.data[[target]]))) + 
+      geom_density(alpha = 0.5) +  # Adjust transparency for overlapping
+      scale_fill_manual(values = c('blue', 'red')) +  # Customize fill colors
+      labs(title = paste("Density Plot for", .x), x = .x, y = "Density") + 
+      theme_minimal() + 
+      theme(legend.title = element_blank())
+  })
+  
+  walk(plot_list, print)
+}
+
+# Usage example:
+show.densityplot(selected_data, PREDICTOR_NAMES, TARGET)
+```
+
+### Normality
+
+We will also apply the density plot to **visualize density for each predictor**.
+
+```{r}
+
+show.scatterplot <- function(df, cols){
+  
+  plot_list <- map(cols, ~ ggplot(
+    data = df,
+    mapping = aes(x = .data[[.x]])
+  ) + geom_density(fill = 'green') +
+    theme_minimal())
+  
+  walk(plot_list, print)
+}
+
+show.scatterplot(selected_data, PREDICTOR_NAMES)
+```
+
+From the plots above we have detected for the most of the predictors **very high Kurtosis** which means sharp, tall peaks and heavy tails in the distributions. This implies most of the values are concentrated very close to the mean/median and there are also extreme outliers - relatively few but very far from the center.
+
+### Linearity
+
+Now we can use scatterplot and try to apply the **smoothing line of Logistic Regression** and attempt to **catch the linearity between target and predictors**.
+
+```{r}
+
+show.scatterplot_with_sigmoid <- function(df, cols, target) {
+  
+  plot_list <- map(cols, ~ ggplot(
+    data = df,
+    mapping = aes(x = .data[[.x]], y = .data[[target]])
+  ) + 
+    geom_point(color = 'blue', alpha = 0.5) +  # Scatter plot points
+    geom_smooth(method = "glm", 
+                method.args = list(family = "binomial"),  # Logistic regression (sigmoid)
+                se = FALSE, color = 'red') +  # Logistic regression line
+    theme_minimal())
+  
+  walk(plot_list, print)
+}
+
+show.scatterplot_with_sigmoid(selected_data, PREDICTOR_NAMES, TARGET)
+```
+
+We can see from the plots, that for each predictor the algorithm **fails to converge**. This stems from the already mentioned imbalance between the target classes.
+
+## Saving the observations
+
+After finishing EDA we save some important observations for better accessibility.
+
+```{r}
+
+library(knitr)
+
+kable_correlation <- kable(cor_matrix, format = "markdown")
+writeLines(kable_correlation, "../output/tables/independence_matrix.md")
+```
+
+## Conclusion & Recommendation
+
+By performing EDA, we have performed the following actions:
+
+1) Feature Selection
+
+2) Checking various metrics of basic statistics and scale for all predictors
+
+3) Detecting missing values
+
+4) Detecting outliers
+
+5) Detecting the independence between predictors
+
+6) Observing the distribution for each predictor
+
+During the next phase, **Data Preprocessing**, we recommend to do the following actions:
+
+### Dealing with Outliers
+
+-   As some models are sensitive to outliers, we recommend **removing the outliers** if their portion is not substantial. Otherwise we recommend **imputing a placeholder value** (median, mean, etc.).
+
+### Dealing with dependent variables
+
+-   We recommend removing any attributes that have correlation **higher than 0.7**. Please check the independence matrix in this document.
+
+### Picking the right Model
+
+-   We have also detected high imbalance between target classes (class 0 was much more populated compared to bankrupted companies).
+
+-   We recommend some actions to be taken here for each model separately.
+
+### Logistic Regression
+
+-    Simple, interpretable, and fast.
+
+-   Because of high imbalance between target classes, it can be biased towards the majority class. We recommend using **class weights**.
+
+-   We could also apply **regularization (like L1, L2, etc.)** to improve performance.
+
+### Support Vector Machines (SVM)
+
+-   Powerful classifiers, especially for high-dimensional datasets.
+
+-    SVMs are sensitive to **class imbalance**. However, **class weighting** can help.
+
+-    Using **RBF kernel** might help capture more complex (non-linear) decision boundaries
+
+-   Computationally expensive with large datasets.
+
+### Linear Discriminant Analysis (LDA) / Quadratic Discriminant Analysis (QDA)
+
+-   They expect **normally distributed** data within each class.
+
+-   **Highly skewed data** can degrade their performance.
+
+-   QDA can **deal with non-linear relationships.**
+
+### Random Forests
+
+-   Generally **perform better on imbalanced dataset**.
+
+-   They can **handle non-linear relationships**.
+
+-   They are **computationally expensive**.
+
+-   **Parameter tunning** is recommended.
+
+    > We definitely recommend trying this model!
