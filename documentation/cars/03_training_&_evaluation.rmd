@@ -1,0 +1,94 @@
+---
+title: "EDA for OZNAL project"
+author: "Filip Remšík, Filip Mojto"
+date: "`r Sys.Date()`" # the date updates automatically when rendered
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true # Adds a table of contents (TOC)
+    toc_float: true # Makes the TOC float on the side
+---
+
+```{r setup, include=FALSE}
+# A code chunk labeled setup.
+# this chunk will not appear in the final document (no code, no output shown), but it will run
+
+# Sets global options for all subsequent code chunks.
+#echo = TRUE means R code will be displayed in the output (HTML/PDF).
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r}
+
+library(tidyverse)
+library(conflicted)
+library(corrplot)
+library(purrr)
+library(caret)
+library(nnet)
+library(pROC)
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+
+```
+
+## Dataset
+
+```{r}
+
+paste("Loading dataset from '", getwd(), "'")
+
+df <- read_csv("../../data/preprocessed/cars_v1.csv", show_col_types = FALSE)
+summary(df)
+```
+
+```{r}
+
+PREDICTORS <- c('Brand_encoded', 'age', 'Model_encoded', 
+                'Car_Suv_encoded', 'UsedOrNew_encoded', 
+                'Transmission_encoded', 'Kilometres_num')
+TARGET <- 'Price'
+
+df <- df %>% select(all_of(PREDICTORS), all_of(TARGET))
+
+```
+
+```{r}
+
+
+set.seed(123)  # For reproducibility
+train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
+train_data <- df[train_index, ]
+test_data  <- df[-train_index, ]
+
+# Option A: Log-transform Price
+train_data$log_Price <- log(train_data$Price)
+
+# Option B: Remove extreme values (e.g., top/bottom 1%)
+price_cutoffs <- quantile(train_data$Price, c(0.01, 0.99))
+train_clean <- train_data %>% 
+  filter(Price > price_cutoffs[1] & Price < price_cutoffs[2])
+```
+
+```{r}
+
+# Train model
+# Use formula syntax (Price ~ . uses all other columns as predictors)
+# Create formula dynamically
+model_formula <- reformulate(PREDICTORS, response = "Price")
+
+# Train model
+lm_model <- train(
+  model_formula,
+  data = train_clean,
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 5)
+)
+
+# Print model coefficients
+summary(lm_model$finalModel)
+```
