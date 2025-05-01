@@ -3,11 +3,11 @@ title: "EDA for OZNAL project"
 author: "Filip Remšík, Filip Mojto"
 date: "`r Sys.Date()`" # the date updates automatically when rendered
 output:
+  pdf_document:
+    toc: true
   html_document:
     toc: true # Adds a table of contents (TOC)
     toc_float: true # Makes the TOC float on the side
-  pdf_document:
-    toc: true
 ---
 
 ```{r setup, include=FALSE}
@@ -89,6 +89,14 @@ This blocks ensures that target is treated as factor so that it is later process
 
 # target is now treated as factor (required in boxplots for proper binning)
 selected_data[[TARGET]] <- as.factor(selected_data[[TARGET]])
+
+# Create a bar plot of diabetes frequencies
+ggplot(selected_data, aes(x = factor(`Bankrupt?`))) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Frequency of Diabetes Classes",
+       x = "Bankrupt? (0 = No, 1 = Yes)",
+       y = "Count") +
+  theme_minimal()
 
 ```
 
@@ -200,7 +208,7 @@ have substantial portion of outliers which will be needed to be dealt with later
 
 For most of the classification models, the independence between individual predictors is crucial. This basically means their correlation is not significant. We can visually check that using **corrplot**.
 
-```{r correlation fig.width=15, fig.height=15}
+```{r correlation, fig.width=15, fig.height=15}
 
 show.corrplot <- function(matrix){
   p <- corrplot(

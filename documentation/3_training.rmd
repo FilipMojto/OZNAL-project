@@ -1,0 +1,234 @@
+---
+title: "Model Training for OZNAL project"
+author: "Filip Remšík, Filip Mojto"
+date: "`r Sys.Date()`" # the date updates automatically when rendered
+output:
+  html_document:
+    toc: true # Adds a table of contents (TOC)
+    toc_float: true # Makes the TOC float on the side
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+# A code chunk labeled setup.
+# this chunk will not appear in the final document (no code, no output shown), but it will run
+
+# Sets global options for all subsequent code chunks.
+#echo = TRUE means R code will be displayed in the output (HTML/PDF).
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Model Training
+
+## Libraries
+
+```{r}
+
+library(tidyverse)
+library(conflicted)
+library(corrplot)
+library(purrr)
+library(caret)
+library(nnet)
+library(pROC)
+
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+
+```
+
+## Dataset
+
+### Load
+
+```{r}
+
+paste("Loading dataset from '", getwd(), "'")
+
+df <- read_csv("../data/raw/data.csv", show_col_types = FALSE)
+```
+
+### Predictors
+
+```{r}
+
+TARGET = 'Bankrupt?'
+# indices of predictors
+PREDICTORS = c(2, 5, 7, 10, 25, 26, 27, 28, 29, 30, 31, 32)
+PREDICTOR_NAMES <- names(df)[PREDICTORS]
+cat("Predictors: \n")
+walk(PREDICTOR_NAMES, print)
+
+selected_data <- df %>%
+  select(all_of(PREDICTORS), all_of(TARGET))
+
+selected_data
+
+# target is now treated as factor (required in boxplots for proper binning)
+selected_data[[TARGET]] <- as.factor(selected_data[[TARGET]])
+selected_data[[TARGET]] <- relevel(selected_data[[TARGET]], ref = "1")
+
+```
+
+```{r}
+
+show.corrplot <- function(matrix){
+  p <- corrplot(
+    matrix,
+    method = 'color',
+    type = 'lower',
+    tl.cex = 0.6,        # much smaller axis text
+    cl.cex = 0.6,        # smaller colorbar text
+    addCoef.col = "black",
+    number.cex = 0.5,    # smaller correlation coefficients
+    tl.srt = 45
+  )
+  
+  print(p)
+}
+
+# we need to truncate the predictor names so that the results are displayed
+# better
+cor_matrix <- cor(selected_data[,PREDICTOR_NAMES])
+truncate_labels <- function(labels, max_length = 20) {
+  sapply(labels, function(lab) {
+    if (nchar(lab) > max_length) {
+      paste0(substr(lab, 1, max_length), "…")  # ellipsis
+    } else {
+      lab
+    }
+  })
+}
+
+# applying truncation
+colnames(cor_matrix) <- truncate_labels(colnames(cor_matrix))
+rownames(cor_matrix) <- truncate_labels(rownames(cor_matrix))
+
+show.corrplot(cor_matrix)
+```
+
+## Random Forest
+
+### Model Fitting, Cross Validation & Parameter Tuning
+
+```{r}
+
+SEED = 123
+
+# Set seed for reproducibility
+set.seed(SEED)
+
+# Convert target to factor for classification
+#selected_data[[TARGET]] <- as.factor(selected_data[[TARGET]])
+
+# Create train/test split (optional but recommended)
+train_index <- createDataPartition(selected_data[[TARGET]], p = 0.8, list = FALSE)
+train_data <- selected_data[train_index, ]
+test_data  <- selected_data[-train_index, ]
+
+train.RF <- function(data, target, CV_folds = 5, SMOTE = FALSE, tuneLenth = 3, seed = 123){
+  set.seed(seed)
+  
+  if (SMOTE) {
+  
+    tc <- trainControl(method = "cv", number = CV_folds, sampling = "smote")
+  } else {
+    print("NO SMOTE")
+    tc <- trainControl(method = "cv", number = CV_folds)
+  }
+
+  # Train Random Forest model
+  rf_model <- train(
+    as.formula(paste0("`", target, "` ~ .")),
+    data = data,
+    method = "rf",
+    trControl = tc,  # 5-fold cross-validation
+    # how many predictors are selected randomly for each decisions tree
+    # 1 <= K <= N, where N is number of predictors
+    # ideal range is from 1 to sqrt(N)
+    tuneLength = tuneLenth  # tries different mtry values
+  )
+  
+  return(rf_model)
+}
+```
+
+#### Without SMOTE
+
+```{r}
+
+
+rf_model <- train.RF(data = train_data, target = TARGET, CV_folds = 5, SMOTE = FALSE, tuneLenth = 3, seed = SEED)
+
+print(rf_model)
+
+```
+
+#### With SMOTE
+
+```{r}
+
+rf_model_smote <- train.RF(data = train_data, target = TARGET, CV_folds = 5, SMOTE = TRUE, tuneLenth = 3, seed = SEED)
+
+print(rf_model_smote)
+
+varImpPlot <- varImp(rf_model_smote)
+plot(varImpPlot, top = 12)
+
+```
+
+### Model Evaluation
+
+```{r}
+
+THRESHOLD <- 0.05
+
+test.RF <- function(data, rf_model, threshold = 0.5){
+  # Make predictions
+  #rf_predictions <- predict(rf_model, newdata = test_data)
+  # e.g., if rf_prob is your predicted probabilities:
+  # Get predicted probabilities for class "1"
+  rf_prob <- predict(rf_model, data, type = "prob")[, "1"]
+  
+  # Convert probabilities to class predictions using custom threshold (e.g., 0.2)
+  rf_predictions <- ifelse(rf_prob > threshold, "1", "0")
+  
+  # Ensure both prediction and reference are factors with same levels
+  rf_predictions <- factor(rf_predictions, levels = c("0", "1"))
+  reference <- factor(data[[TARGET]], levels = c("0", "1"))
+  
+  # Now you can compute confusion matrix
+  cm <- confusionMatrix(rf_predictions, reference, positive = "1")
+  print(cm)
+  # ROC and AUC (if binary classification)
+  rf_prob <- predict(rf_model, newdata = data, type = "prob")[, 2]
+  roc_obj <- roc(data[[TARGET]], rf_prob)
+  plot(roc_obj)
+  auc(roc_obj)
+}
+
+
+```
+
+#### Adjusting decision threshold
+
+```{r}
+
+test.RF(data = test_data, rf_model = rf_model, threshold = THRESHOLD)
+
+```
+
+#### Using SMOTE
+
+```{r}
+
+THRESHOLD = 0.5
+# Make predictions
+#rf_predictions <- predict(rf_model_smote, newdata = test_data)
+
+test.RF(data = test_data, rf_model = rf_model_smote, threshold = THRESHOLD)
+
+```
