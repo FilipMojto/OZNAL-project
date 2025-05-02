@@ -20,6 +20,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```
 
+## Libraries
+
 ```{r}
 
 library(tidyverse)
@@ -46,40 +48,50 @@ df <- read_csv("../../data/preprocessed/cars_v1.csv", show_col_types = FALSE)
 summary(df)
 ```
 
+## Target & Predictors
+
 ```{r}
 
-PREDICTORS <- c('Brand_encoded', 'age', 'Model_encoded', 
-                'Car_Suv_encoded', 'UsedOrNew_encoded', 
-                'Transmission_encoded', 'Kilometres_num')
-TARGET <- 'Price'
+TARGET = 'Price'
 
-df <- df %>% select(all_of(PREDICTORS), all_of(TARGET))
+EDA_selected = c('Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded',
+                 'DriveType_encoded')
+  
+selected_data <- df %>% select(all_of(EDA_selected), all_of(TARGET))
+selected_data <- selected_data %>% filter(complete.cases(.))
+summary(selected_data)
 
 ```
+
+## Linear Regression
+
+### Train/Test Split
 
 ```{r}
 
 
 set.seed(123)  # For reproducibility
-train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
-train_data <- df[train_index, ]
-test_data  <- df[-train_index, ]
+train_index <- createDataPartition(selected_data$Price, p = 0.8, list = FALSE)
+train_data <- selected_data[train_index, ]
+test_data  <- selected_data[-train_index, ]
 
 # Option A: Log-transform Price
 train_data$log_Price <- log(train_data$Price)
 
 # Option B: Remove extreme values (e.g., top/bottom 1%)
-price_cutoffs <- quantile(train_data$Price, c(0.01, 0.99))
+price_cutoffs <- quantile(train_data$log_Price, c(0.01, 0.99))
 train_clean <- train_data %>% 
-  filter(Price > price_cutoffs[1] & Price < price_cutoffs[2])
+  filter(log_Price > price_cutoffs[1] & log_Price < price_cutoffs[2])
 ```
+
+### Cross Validation
 
 ```{r}
 
 # Train model
 # Use formula syntax (Price ~ . uses all other columns as predictors)
 # Create formula dynamically
-model_formula <- reformulate(PREDICTORS, response = "Price")
+model_formula <- reformulate(EDA_selected, response = "log_Price")
 
 # Train model
 lm_model <- train(
@@ -92,3 +104,45 @@ lm_model <- train(
 # Print model coefficients
 summary(lm_model$finalModel)
 ```
+
+### Predicted vs. Actual - Log Scale
+
+```{r}
+
+# Predict on test data
+test_data$log_Price_pred <- predict(lm_model, newdata = test_data)
+
+# Back-transform: predicted and actual prices
+test_data$Price_pred <- exp(test_data$log_Price_pred)
+
+# --- 1. Plot: Predicted vs. Actual (log scale) ---
+ggplot(test_data, aes(x = log(Price), y = log_Price_pred)) +
+  geom_point(alpha = 0.4, color = "blue") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Predicted vs. Actual Prices (Log Scale)",
+       x = "Actual log(Price)", y = "Predicted log(Price)") +
+  theme_minimal()
+
+# --- 2. Plot: Predicted vs. Actual (original price scale) ---
+ggplot(test_data, aes(x = Price, y = Price_pred)) +
+  geom_point(alpha = 0.4, color = "darkgreen") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Predicted vs. Actual Prices (Original Scale)",
+       x = "Actual Price", y = "Predicted Price") +
+  scale_x_continuous(labels = scales::dollar) +
+  scale_y_continuous(labels = scales::dollar) +
+  theme_minimal()
+
+```
+
+### Residuals
+
+Interpreting the **residuals histogram** helps us assess whether our linear model's assumptions are reasonably met. If the histogram is symmetric and centered around 0, that's a good sign — it means our model doesn’t systematically over- or under-predict.
+
+```{r}
+
+residuals <- residuals(lm_model$finalModel)
+hist(residuals, breaks = 50, main = "Histogram of Residuals", col = "gray")
+```
+
+From the distribution above we can say that our model doesn't systematically overpredict or underpredict (skewness). Also the spread is not high which implies low prediction error. The distribution is normal which supports model's inference.
