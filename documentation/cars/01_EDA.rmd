@@ -85,6 +85,8 @@ After viewing the summary in previous section we have chosen the following predi
 ```{r}
 
 colnames(df)[colnames(df) == "Car/Suv"] <- "Car_Suv"
+df$Brand_Model <- paste(df$Brand, df$Model)
+
 
 PREDICTORS <- c('Brand_encoded', 'age', 'Model_encoded', 
                 'Car_Suv_encoded', 'UsedOrNew_encoded', 
@@ -92,7 +94,7 @@ PREDICTORS <- c('Brand_encoded', 'age', 'Model_encoded',
                 'Cylinders', 'Engine_L', 'DriveType_encoded',
                 'FuelType_encoded', 'FuelConsumption_num',
                 'ColourExtInt_encoded', 'Location_encoded',
-                'BodyType_encoded', 'Doors_num', 'Seats_num')
+                'BodyType_encoded', 'Doors_num', 'Seats_num', 'Brand_Model_encoded')
 TARGET <- 'Price'
 df
 
@@ -157,12 +159,11 @@ These are columns that need to be encoded. We simply apply the function defined 
 
 ```{r}
 
-COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission', 'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType')
+COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission', 'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType', 'Brand_Model')
 
 
 df <- reduce(COLS_TO_ENCODE, ~ target.encode(df = .x, target = TARGET, col = .y), .init = df)
 
-df
 
 ```
 
@@ -355,7 +356,7 @@ ggplot(df, aes(x = Price)) +
 
 ```
 
-From the plots above we can tell that scaling helped making the distribution more normal.
+From the plots above we can tell that scaling helped making the distribution more normal. The x-axis is **labeled in original units** for readability, even though the data is plotted on a log scale.
 
 ## Saving to csv
 
@@ -382,11 +383,11 @@ During performing EDA we have found out that:
 
 -   We detected some portion of missing values -\> Removing is required:
 
-    a) NA
+    a)  NA
 
-    b) -/- in *ColourExtInt*
+    b)  -/- in *ColourExtInt*
 
-    c) - in *Cylinders*, *CylindersinEngine*
+    c)  in *Cylinders*, *CylindersinEngine*
 
 -   For target, we have detected quite skewed distribution -\> Log Scale.
 
@@ -396,22 +397,20 @@ During performing EDA we have found out that:
 
 -   We recommend trying the following parameters:
 
-    a) **Brand_encoded**
+    a)  **Brand_Model_encoded** (Merging Brand and Model)
 
-    b) **Model_encoded**
+    b)  **Location_encoded**
 
-    c) **Location_encoded**
+    c)  **Car_suv_encoded**
 
-    d) **Car_suv_encoded**
+    d)  **Kilometers or age**
 
-    e) **Kilometers or age**
+    e)  **Cylinders**
 
-    f) **Cylinders**
+    f)  **ColourExtInt**
 
-    g) **ColourExtInt**
+    g)  **FuelType_encoded**
 
-    h) **FuelType_encoded**
-
-    i) **DriveType_encoded**
+    h)  **DriveType_encoded**
 
     Rest of the parameters have either no information gain (like Title or CylindersinEngine) or have high correlation with other parameters (BodyType, age, etc.) or simply have no great effect on the target (*Doors*, *Seats*, etc.)
