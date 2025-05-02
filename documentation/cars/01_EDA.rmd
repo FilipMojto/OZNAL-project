@@ -3,11 +3,11 @@ title: "EDA for OZNAL project"
 author: "Filip Remšík, Filip Mojto"
 date: "`r Sys.Date()`" # the date updates automatically when rendered
 output:
-  pdf_document:
-    toc: true
   html_document:
     toc: true # Adds a table of contents (TOC)
     toc_float: true # Makes the TOC float on the side
+  pdf_document:
+    toc: true
 ---
 
 # 01 - EDA
@@ -16,7 +16,7 @@ In this document we perform Exploratory Data Analysis. The input is the hypothes
 
 Our hypothesis is as follows:
 
-*Car prices are heavily influenced by attributes like Brand, Age, Model, etc.*
+*"Vehicle prices can be reliably predicted using a combination of manufacturer (brand), vehicle specifications (age, mileage, engine type), and geographic (location) features, with brand and age being the most significant predictors."*
 
 ## Setup
 
@@ -43,6 +43,7 @@ library(purrr)
 library(caret)
 library(nnet)
 library(pROC)
+library(scales)  # for comma()
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("lag", "dplyr")
@@ -65,15 +66,15 @@ summary(df)
 
 From the summary above we can see a lot of predictors are not numerical. A large portion of such columns are categorical. For instance:
 
-1) *Brand*
+1)  *Brand*
 
-2) *Model*
+2)  *Model*
 
-3) *Car/Suv*
+3)  *Car/Suv*
 
 ...
 
-Will need to be converted into numbers using some kind of encoding as we think they influence the price.
+These parameters will need to be converted into numbers using some kind of encoding as we think they can have high influence on the price.
 
 Some attributes like *Title* are redundant as they bring no new information and would only complicate our model. Thus, these attributes won't be included.
 
@@ -87,7 +88,11 @@ colnames(df)[colnames(df) == "Car/Suv"] <- "Car_Suv"
 
 PREDICTORS <- c('Brand_encoded', 'age', 'Model_encoded', 
                 'Car_Suv_encoded', 'UsedOrNew_encoded', 
-                'Transmission_encoded', 'Kilometres_num')
+                'Transmission_encoded', 'Kilometres_num',
+                'Cylinders', 'Engine_L', 'DriveType_encoded',
+                'FuelType_encoded', 'FuelConsumption_num',
+                'ColourExtInt_encoded', 'Location_encoded',
+                'BodyType_encoded', 'Doors_num', 'Seats_num')
 TARGET <- 'Price'
 df
 
@@ -95,7 +100,7 @@ df
 
 ## Preprocessing
 
-We already identified some anomalies in data that need to be dealt with for the sake of successful EDA. First it is the missing values.
+We already identified some anomalies in the data that need to be dealt with before diving into EDA. First it is the missing values.
 
 ### Missing Values
 
@@ -103,10 +108,13 @@ First we calculate the portion of missing values for each attribute.
 
 ```{r}
 
-colMeans(is.na(df))
+# For a single column (e.g., 'Seats')
+colMeans(is.na(df))      
+
+
 ```
 
-From the values we can tell that the portion ranges from 0% to 0.1%. We can declare that this dataset doesn't contain significant amount of missing values. We will recommend appropriate actions later in this document but now, for the purpose of EDA, we simply remove all rows that contain any missing values.
+From the values we can tell that the portion ranges from 0% to 10%. We can declare that this dataset doesn't contain significant amount of missing values except for attribute *Seats*. We will recommend appropriate actions later in this document but now, for the purpose of EDA, we simply remove all rows that contain any missing values.
 
 ```{r}
 
@@ -143,13 +151,13 @@ target.encode <- function(df, target, col) {
 }
 ```
 
-### Brand, Model, Car_Suv, UsedOrNew and Transmission
+### Target Encoding
 
 These are columns that need to be encoded. We simply apply the function defined above on each of them.
 
 ```{r}
 
-COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission')
+COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission', 'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType')
 
 
 df <- reduce(COLS_TO_ENCODE, ~ target.encode(df = .x, target = TARGET, col = .y), .init = df)
@@ -170,16 +178,55 @@ current_year <- as.numeric(format(Sys.Date(), "%Y"))
 df$age <- current_year - df$Year
 ```
 
+### Engine -\> Cylinders, Engine
+
+```{r}
+
+# extract actually replaces the original column with new ones based on regex match
+df <- df %>%
+  extract(
+    Engine,                 # The source column containing engine info
+    into = c("Cylinders", "Engine_L"),  # New columns to create
+    regex = "(\\d+) cyl, (\\d+\\.?\\d*) L",  # Pattern to match
+    convert = TRUE          # Automatically convert to appropriate data types
+  )
+
+df
+```
+
+### FuelComsumption
+
+```{r}
+
+df <- df %>%
+  mutate(
+    FuelConsumption_num = as.numeric(str_extract(FuelConsumption, "\\d+\\.?\\d*"))
+  )
+
+df
+
+```
+
+### Doors and Seats
+
+```{r}
+
+df$Doors_num <- as.numeric(gsub("[^0-9]", "", df$Doors))
+df$Seats_num <- as.numeric(gsub("[^0-9]", "", df$Seats))
+```
+
 After preprocessing is over, we can visualize the final dataset.
 
 ```{r}
 
-View(df)
+df
 unique(df$UsedOrNew)
 summary(df)
 ```
 
-### Target Correlations - Linearity
+## EDA
+
+### Linearity
 
 In this section we check how well do the predictors correlate with the target. We will utilize Scatterplots for that. We also try to draw a linear line in the plot to see if there is linear relationship.
 
@@ -212,7 +259,7 @@ From the plots above we can say that after applying the encoding the dots are pr
 
 ### Colinearity
 
-We also need to check whether there are not high correlations between individual predictors. This kind of predictors are duplicate and bring no new information to the model function.
+We also need to check whether there are not high correlations between individual predictors. This kind of predictors is duplicate and bring no new information to the model function.
 
 In order to show the multicollinearity in a nice way, we are going to use and display a Correlation Matrix. If the values are above a significant level (0.7 in our case) there is a serious collinearity between predictors.
 
@@ -233,13 +280,7 @@ show.corrplot <- function(matrix){
   print(p)
 }
 
-# Exclude 'Price' column
-# selected_data <- df_clean %>% select(-Price)
-# 
-# # Compute correlation matrix
-# cor_matrix <- cor(selected_data, use = "complete.obs")  # Handles NAs by pairwise deletion
 
-# Plot correlations
 cor_data <- df %>% select(all_of(PREDICTORS), all_of(TARGET))
 cor_matrix <- cor(cor_data, use = "complete.obs")
 show.corrplot(cor_matrix)
@@ -248,17 +289,45 @@ show.corrplot(cor_matrix)
 
 From the matrix we can see, that several pairs like:
 
-a) *Kilometres_num* and *age* (0.75)
+a)  *Kilometres_num* and *age* (0.75)
 
-b) *Model_encoded* and *Brand_encoded* *(0.61)*
+b)  *Model_encoded* and *Brand_encoded* *(0.61)*
 
-c) *UsedOrNew_encoded* and *Car_Suv_encoded* *(0.54)*
+c)  *UsedOrNew_encoded* and *Car_Suv_encoded* *(0.54)*
 
 have quite high correlation.
 
-## Target Distribution
+### Outliers
 
-We also need to check the distribution of the target variable to see how balanced the dataset is. We have found out that the prices are highly skewed. By applying the log scale we can deal with extremes values. Thus, we plot two histograms comparing the original distribution against the log-scaled distribution.
+We also need to visualize the proportion of outliers present in our data. To achieve this in a neat and representative way, we are going to utilize Boxplots.
+
+```{r}
+
+
+show.boxplot <- function(data, cols, target, bins = 5) {
+  data <- data %>%
+    mutate(target_binned = cut(.data[[target]], breaks = bins, include.lowest = TRUE))
+
+  plots <- map(cols, ~ggplot(
+    data,
+    aes(x = target_binned, y = .data[[.x]])) +
+      geom_boxplot(aes(group = target_binned)) +
+      labs(x = paste0(target, " (binned)"), y = .x) +
+      theme_minimal() +
+      scale_x_discrete(labels = function(x) gsub(",", "\n", x))  # Wrapping long bin labels
+  )
+
+  walk(plots, print)
+}
+
+show.boxplot(data = df, cols = PREDICTORS, target = TARGET, bins = 10)
+```
+
+From the boxplots we have detected quite a notable portion of outliers. Certain actions will need to be taken.
+
+### Target Distribution
+
+We also need to check the distribution of the target variable to see how balanced the dataset is. We have found out that the prices are highly skewed. By applying the log scale we can deal with these extremes values. Thus, we plot two histograms comparing the original distribution against the log-scaled distribution.
 
 ```{r}
 
@@ -295,8 +364,9 @@ Since we performed some preprocessing we save the data into
 */data/preprocessed/*
 
 ```{r}
+selected_df <- df %>% select(all_of(PREDICTORS), all_of(TARGET))
 
-write.csv(df, file = "../../data/preprocessed/cars_v1.csv", row.names = FALSE)  # Avoid row numbers
+write.csv(selected_df, file = "../../data/preprocessed/cars_v1.csv", row.names = FALSE)  # Avoid row numbers
 
 ```
 
@@ -310,10 +380,38 @@ During performing EDA we have found out that:
 
 -   We identified pretty linear relationships between target and predictors.
 
--   We detected some portion of missing values -\> Removing is required.
+-   We detected some portion of missing values -\> Removing is required:
+
+    a) NA
+
+    b) -/- in *ColourExtInt*
+
+    c) - in *Cylinders*, *CylindersinEngine*
 
 -   For target, we have detected quite skewed distribution -\> Log Scale.
 
--   We detected some portion of outliers -\> Log scale, IQR, etc.
+-   We also detected some portion of outliers -\> Log scale, IQR, etc.
 
--   For this problem we recommend training **Linear Regression**, **Polynomial Regression** or **Random Forest**.
+-   For this problem we recommend training **Linear Regression**, **Polynomial Regression** or **Random Forests**.
+
+-   We recommend trying the following parameters:
+
+    a) **Brand_encoded**
+
+    b) **Model_encoded**
+
+    c) **Location_encoded**
+
+    d) **Car_suv_encoded**
+
+    e) **Kilometers or age**
+
+    f) **Cylinders**
+
+    g) **ColourExtInt**
+
+    h) **FuelType_encoded**
+
+    i) **DriveType_encoded**
+
+    Rest of the parameters have either no information gain (like Title or CylindersinEngine) or have high correlation with other parameters (BodyType, age, etc.) or simply have no great effect on the target (*Doors*, *Seats*, etc.)
