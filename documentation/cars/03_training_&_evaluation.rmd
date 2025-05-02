@@ -54,7 +54,7 @@ summary(df)
 
 TARGET = 'Price'
 
-EDA_selected = c('Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded',
+EDA_selected = c('Brand_encoded'Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded',
                  'DriveType_encoded')
   
 selected_data <- df %>% select(all_of(EDA_selected), all_of(TARGET))
@@ -64,6 +64,25 @@ summary(selected_data)
 ```
 
 ## Linear Regression
+
+### Outliers
+
+```{r}
+
+# Function to winsorize
+winsorize <- function(x, limits = c(0.01, 0.99)) {
+  x[x < quantile(x, limits[1], na.rm = TRUE)] <- quantile(x, limits[1], na.rm = TRUE)
+  x[x > quantile(x, limits[2], na.rm = TRUE)] <- quantile(x, limits[2], na.rm = TRUE)
+  x
+}
+
+# Apply to new features
+selected_data <- selected_data %>%
+  mutate(across(
+    all_of(EDA_selected),  # Use all_of() for safety
+    winsorize
+  ))
+```
 
 ### Train/Test Split
 
@@ -146,3 +165,24 @@ hist(residuals, breaks = 50, main = "Histogram of Residuals", col = "gray")
 ```
 
 From the distribution above we can say that our model doesn't systematically overpredict or underpredict (skewness). Also the spread is not high which implies low prediction error. The distribution is normal which supports model's inference.
+
+### Homoscedasticity
+
+Linear and polynomial regression require homoscedasticity of predictors. This means they are scattered around 0 without any clear patterns. We are going to check that out by using Scatterplot and QQPlot.
+
+```{r}
+
+# For linear models (lm)
+# Extract final model to use base R plotting
+par(mfrow = c(1, 1))
+plot(lm_model$finalModel)
+
+```
+
+From the plots we can tell that residuals are scattered quite normally around zero. From the QQPlot we can see that they almost perfectly follow the line, though there are deviated values (tails).
+
+## Polynomial Regression
+
+## Random Forest
+
+## Conclusion
