@@ -1,0 +1,238 @@
+---
+title: "EDA for OZNAL project"
+author: "Filip Remšík, Filip Mojto"
+date: "`r Sys.Date()`" # the date updates automatically when rendered
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true # Adds a table of contents (TOC)
+    toc_float: true # Makes the TOC float on the side
+---
+
+# 02 - Preprocessing
+
+Now we will perform the data preprocessing based on the result from the eda.
+
+## Setup
+
+```{r setup, include=FALSE}
+# A code chunk labeled setup.
+# this chunk will not appear in the final document (no code, no output shown), but it will run
+
+# Sets global options for all subsequent code chunks.
+#echo = TRUE means R code will be displayed in the output (HTML/PDF).
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Libraries
+
+This is a list of libraries we are going to need throughout this document. Must be run before any other block.
+
+```{r}
+
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(conflicted)
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+
+
+```
+
+## Dataset
+
+```{r}
+paste("Loading dataset from '", getwd(), "'")
+
+df <- read_csv("../../data/raw/australian_vehicle_prices.csv", show_col_types = FALSE)
+```
+
+We select only the columns we will need for our solution.
+
+```{r}
+colnames(df)[colnames(df) == "Car/Suv"] <- "Car_Suv"
+
+PREDICTORS <- c('Brand', 'Year', 'Model', 
+                'Car_Suv', 'UsedOrNew', 
+                'Transmission', 'Kilometres')
+TARGET <- 'Price'
+
+df <- df[, c(PREDICTORS, TARGET)]
+df
+
+```
+
+## Missing values
+
+After reviewing the data, we discovered that some records appeared empty but contained a character, so we corrected them.
+
+```{r}
+df[df == "-" | df == "-/-"] <- NA
+```
+
+```{r}
+missing_summary <- data.frame(
+  Column = names(df),
+  Missing_Count = colSums(is.na(df)))
+
+missing_summary
+```
+
+## Deleting rows
+
+Since there aren't many missing values and imputing them could degrade the data quality, we decided to remove them.
+
+```{r}
+rows_before <- nrow(df)
+print(paste("Rows before removing NA:", rows_before))
+
+# Step 2: Remove rows with any NA values
+df <- na.omit(df)
+
+# Step 3: Count rows after removing NA
+rows_after <- nrow(df)
+print(paste("Rows after removing NA:", rows_after))
+```
+
+## Encoding
+
+Because data contain a lot of categorical attributes that are relevant to our goal, we've created the following function. This function performs so-called **Target Encoding** which is different from standard one-hot encoding in that that is encodes the categories based on how strong impact the predictor has on the target. Higher average price for the particular predictors means higher assigned number.
+
+```{r}
+target.encode <- function(df, target, col) {
+  # Convert column name to symbol for tidy evaluation
+  col_sym <- sym(col)
+  encoded_col_name <- paste0(col, "_encoded")
+  
+  # Step 1: Calculate mean target per group
+  avg_target <- df %>%
+    group_by(!!col_sym) %>%
+    summarise(mean_target = mean(.data[[target]], na.rm = TRUE), .groups = "drop") %>%
+    arrange(mean_target)
+
+  # Step 2: Assign ranks
+  avg_target <- avg_target %>%
+    mutate(!!encoded_col_name := as.numeric(factor(mean_target, levels = unique(mean_target))) - 1)
+
+  # Step 3: Join encoded column back to original dataframe
+  df <- df %>%
+    left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
+
+  return(df)
+}
+```
+
+```{r}
+COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission')
+
+
+df <- reduce(COLS_TO_ENCODE, ~ target.encode(df = .x, target = TARGET, col = .y), .init = df)
+
+df
+```
+
+## Change Kilometers to numerical
+
+```{r}
+df <- df %>%
+  mutate(Kilometres_num = as.numeric(gsub("[^0-9]", "", Kilometres)))
+numeric_cols <- df[, sapply(df, is.numeric)]
+
+```
+
+## Year -\> Age
+
+Age is time-based feature and thus it introduces inflation. Is is therefore wise to convert it into age using the following formula:
+
+*age = current - manufacturing_year*
+
+```{r}
+
+current_year <- as.numeric(format(Sys.Date(), "%Y"))
+df$age <- current_year - df$Year
+```
+
+## Remowing columns, that are no longer need
+
+```{r}
+df <- df %>% select(-c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission','Year','Kilometres'))
+```
+
+## Handling outliers
+
+```{r}
+
+num_cols <- df[, sapply(df, is.numeric)]
+
+# Loop through each numeric column
+for (colname in names(num_cols)) {
+  boxplot(num_cols[[colname]],
+          main = paste("Boxplot of", colname),
+          ylab = colname)
+}
+```
+
+## Apply Log scale on Price
+
+Our target variable, Price, has a skewed distribution; therefore, we decided to use a log scale.
+
+```{r}
+df <- df %>% mutate(Price_log = log10(Price + 1))
+
+```
+
+### Other outliers
+
+```{r}
+detect_outliers_iqr <- function(df, remove = FALSE) {
+  # Work only with numeric columns
+  num_cols <- df[, sapply(df, is.numeric), drop = FALSE]
+  
+  # Store logical matrix of outlier flags
+  outlier_flags <- as.data.frame(matrix(FALSE, nrow = nrow(df), ncol = ncol(num_cols)))
+  names(outlier_flags) <- names(num_cols)
+  
+  # Loop over each numeric column
+  for (colname in names(num_cols)) {
+    x <- num_cols[[colname]]
+    Q1 <- quantile(x, 0.25, na.rm = TRUE)
+    Q3 <- quantile(x, 0.75, na.rm = TRUE)
+    IQR_val <- IQR(x, na.rm = TRUE)
+    
+    lower <- Q1 - 1.5 * IQR_val
+    upper <- Q3 + 1.5 * IQR_val
+    
+    outlier_flags[[colname]] <- x < lower | x > upper
+  }
+  
+  # Combine into summary
+  outlier_summary <- data.frame(
+    Column = names(num_cols),
+    Outlier_Count = colSums(outlier_flags, na.rm = TRUE)
+  )
+  
+  # Optionally remove rows with any outliers
+  if (remove) {
+    # Remove any rows with outliers in any column
+    df <- df[!apply(outlier_flags, 1, any), ]
+  }
+  
+  return(list(
+    cleaned_df = df,
+    outlier_flags = outlier_flags,
+    outlier_summary = outlier_summary
+  ))
+}
+
+
+```
+
+## Save data for training
+
+```{r}
+write.csv(df, file = "../../data/preprocessed/cars_v2.csv", row.names = FALSE)  # Avoid row numbers
+```
