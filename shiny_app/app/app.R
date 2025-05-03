@@ -124,18 +124,55 @@ analysis <- eventReactive(input$run, {
         ) +
         theme_minimal()
 
+        # TRAINING performance metrics
+train_predictions <- predict(lm_model$finalModel, newdata = train_data)
+residuals_train <- train_data$log_Price - train_predictions
+rss_train <- sum(residuals_train^2)
+n_train <- nrow(train_data)
+p <- length(lm_model$finalModel$coefficients)  # Number of predictors incl. intercept
+rse_train <- sqrt(rss_train / (n_train - p))
+
+tss_train <- sum((train_data$log_Price - mean(train_data$log_Price))^2)
+r_squared_train <- 1 - rss_train / tss_train
+adj_r_squared_train <- 1 - (1 - r_squared_train) * ((n_train - 1) / (n_train - p))
+
+# TEST performance metrics
+log_Price_test <- log(test_data$Price)
+rss_test <- sum((log_Price_test - test_data$log_Price_pred)^2)
+tss_test <- sum((log_Price_test - mean(log_Price_test))^2)
+r_squared_test <- 1 - rss_test / tss_test
+rmse_test <- sqrt(mean((test_data$log_Price_pred - log_Price_test)^2))
+
+# Combine into a printable summary
+summary_text <- paste0(
+  "TRAINING SET:\n",
+  "  Residual Std. Error (RSE): ", round(rse_train, 4), "\n",
+  "  R-squared: ", round(r_squared_train, 4), "\n",
+  "  Adjusted R-squared: ", round(adj_r_squared_train, 4), "\n\n",
+  
+  "TEST SET:\n",
+  "  RMSE (log_Price): ", round(rmse_test, 4), "\n",
+  "  R-squared: ", round(r_squared_test, 4), "\n"
+)
+
     # Return list of outputs (plots and model summary)
     list(
         layout = (log_scale_plot / original_scale_plot) | residuals_plot,  # Combine the plots
-        summary = summary(lm_model$finalModel)  # Return model summary
+        summary = summary_text  # Return model summary
     )
     })
 
     # Output the layout of the plots
-    output$plots <- renderPlot({
+  output$plots <- renderPlot({
     req(analysis())  # Ensure analysis() is available
     analysis()$layout  # Render the layout
-    })
+  })
+  
+  # Output the model summary text
+  output$model_summary <- renderText({
+    req(analysis())
+    analysis()$summary
+  })
 }
 
 shinyApp(ui = ui, server = server)
