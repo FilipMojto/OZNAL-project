@@ -1,2 +1,8 @@
 
 /scripts
+OZNAL-project.code-workspace
+/documentation/cars/renv
+/documentation/cars/renv.lock
+/documentation/cars/.Rprofile
+/shiny_app/app/setup.R
+/shiny_app/app/requirements.R

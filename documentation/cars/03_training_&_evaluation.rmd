@@ -31,6 +31,8 @@ library(purrr)
 library(caret)
 library(nnet)
 library(pROC)
+library(car)
+
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("lag", "dplyr")
@@ -56,7 +58,7 @@ TARGET = 'Price'
 # Create a new feature combining Brand + Model (e.g., "Toyota_Corolla")
 
 
-EDA_selected = c('Brand_Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded')
+EDA_selected = c('Brand_Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded', 'UsedOrNew_encoded', 'age')
   
 selected_data <- df %>% select(all_of(EDA_selected), all_of(TARGET))
 selected_data <- selected_data %>% filter(complete.cases(.))
@@ -115,13 +117,6 @@ train_data$log_Price <- log(train_data$Price)
 #   filter(log_Price > price_cutoffs[1] & log_Price < price_cutoffs[2])
 ```
 
-```{r}
-# install.packages("car")
-# Check encoding direction
-# cor(train_data$Brand_encoded, train_data$Price)  # Should be positive
-car::vif(lm_model$finalModel)
-```
-
 ### Function Fitting & Cross Validation
 
 Our dataset (consisting of 16000 of car listings) is **large enough** to split into 5 folds while still maintaining sufficient training examples in each fold. It's also **computationally efficient** compared to higher *k* or repeated CV. **LOOCV** technique works for very small datasets (\<100 rows), where maximizing training data is crucial. **Stratified k-Fold Cross-Validation** is best suited for classification problems with imbalanced classes.
@@ -148,19 +143,44 @@ lm_model <- train(
 summary(lm_model$finalModel)
 ```
 
-R-square error represents % of variance in log_Price explained by our model (0.79 = 79%)
+-   The model shows an **R-squared of 0.8508**, meaning **approximately 85.1% of the variance in `log_Price` is explained** by the included predictors. This indicates a strong model fit.
 
-The model had Residual standard error of 0.2944 which means 68% of our predictions fall within ±0.295 log-units of the actual price. C**onverting to Original Scale**:
+<!-- -->
 
-**`exp(0.295) ≈ 1.34`**
+-    The **residual standard error is 0.2491**, which means that about **68% of predictions fall within ±0.249 log-units** of the actual log-price.
 
-**`exp(-0.295) ≈ 0.75`**
+<!-- -->
 
-This means +34% overprediction (1.34× the true price) and -25% underprediction (0.75× the true price).
+-    Converting this error back to the original price scale:
 
-Adjusted R-squared is very close to the original error which is implies that all predictors are important and overfitting is unlikely.
+    -    `exp(0.249) ≈ 1.28` → predictions may overestimate true price by up to **28%**.
 
-The **F-statistic is very high (5453)**, meaning our model explains a lot more variance than the null model. p-value is low which means this test is statistically significant.
+    -    `exp(-0.249) ≈ 0.78` → predictions may underestimate true price by up to **22%**.
+
+<!-- -->
+
+-   The **adjusted R-squared is nearly identical to the R-squared (0.8507)**, indicating that all included predictors are contributing meaningfully and that **overfitting is unlikely**.
+
+-   The **F-statistic is extremely high (6547)** with a **p-value \< 2.2e-16**, showing that the model significantly improves upon the null model.
+
+<!-- -->
+
+-    **All coefficients are highly statistically significant (p \< 0.001)**, supporting their relevance in predicting `log_Price`.
+
+### Multicollinearity
+
+```{r}
+
+vif(lm_model$finalModel)
+```
+
+**Variance Inflation Factors (VIFs)** for all predictors are below 3, with the highest being:
+
+-   age: 2.83
+
+-   Kilometres_num: 2.68
+
+    These values indicate **no concerning multicollinearity** among predictors, even though age and kilometres may be correlated. Their VIFs are well below the common threshold of 5.
 
 ### Predicted vs. Actual - Log Scale
 
