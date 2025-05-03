@@ -413,4 +413,6 @@ During performing EDA we have found out that:
 
     h)  **DriveType_encoded**
 
+    i)  **Used_or_new_encoded**
+
     Rest of the parameters have either no information gain (like Title or CylindersinEngine) or have high correlation with other parameters (BodyType, age, etc.) or simply have no great effect on the target (*Doors*, *Seats*, etc.)

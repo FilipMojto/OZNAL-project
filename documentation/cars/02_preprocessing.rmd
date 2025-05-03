@@ -156,7 +156,7 @@ current_year <- as.numeric(format(Sys.Date(), "%Y"))
 df$age <- current_year - df$Year
 ```
 
-## Remowing columns, that are no longer need
+## Removing columns, that are no longer need
 
 ```{r}
 df <- df %>% select(-c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission','Year','Kilometres'))
