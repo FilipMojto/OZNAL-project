@@ -22,5 +22,5 @@ We recommend attaching volume for dynamic code midifications without needing to 
 whole image.
 
 ```bash
-     docker run -p 3838:3838 -v <absolute_path_to_app_folder>:/app linear_regression
+     docker run -p 3838:3838 --name <cont_name> -v <absolute_path_to_app_folder>:/app linear_regression
 ```

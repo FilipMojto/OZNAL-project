@@ -123,6 +123,21 @@ analysis <- eventReactive(input$run, {
         y = "Density"
         ) +
         theme_minimal()
+    
+    # Residuals vs. Fitted Plot
+    homoscedasticity_plot <- ggplot(model_data, aes(x = Fitted, y = Residuals)) +
+    geom_point(alpha = 0.6, color = "steelblue") +
+    geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+    geom_smooth(method = "loess", color = "darkgreen", se = FALSE) +
+    labs(
+        title = "Residuals vs. Fitted Values",
+        subtitle = "Check for homoscedasticity (constant variance)",
+        x = "Fitted Values (Predicted Price)",
+        y = "Residuals (Actual - Predicted)"
+    ) +
+    theme_minimal()
+
+    
 
         # TRAINING performance metrics
 train_predictions <- predict(lm_model$finalModel, newdata = train_data)
@@ -144,6 +159,7 @@ r_squared_test <- 1 - rss_test / tss_test
 rmse_test <- sqrt(mean((test_data$log_Price_pred - log_Price_test)^2))
 
 # Combine into a printable summary
+# Combine into a printable summary
 summary_text <- paste0(
   "TRAINING SET:\n",
   "  Residual Std. Error (RSE): ", round(rse_train, 4), "\n",
@@ -152,12 +168,19 @@ summary_text <- paste0(
   
   "TEST SET:\n",
   "  RMSE (log_Price): ", round(rmse_test, 4), "\n",
-  "  R-squared: ", round(r_squared_test, 4), "\n"
+  "  R-squared: ", round(r_squared_test, 4), "\n\n",
+  
+  "INTERPRETATION:\n",
+  "  Based on RSE of ", round(rse_train, 4), 
+  ", about 68% of predictions fall within ±", round(rse_train, 3), " log-units.\n",
+  "  This translates to:\n",
+  "    Overestimation up to ~", round((exp(rse_train) - 1) * 100), "%\n",
+  "    Underestimation up to ~", round((1 - exp(-rse_train)) * 100), "%\n"
 )
 
     # Return list of outputs (plots and model summary)
     list(
-        layout = (log_scale_plot / original_scale_plot) | residuals_plot,  # Combine the plots
+        layout = (log_scale_plot / original_scale_plot) | (residuals_plot / homoscedasticity_plot),  # Combine the plots
         summary = summary_text  # Return model summary
     )
     })
