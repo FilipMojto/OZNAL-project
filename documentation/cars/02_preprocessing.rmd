@@ -31,11 +31,11 @@ knitr::opts_chunk$set(echo = TRUE)
 This is a list of libraries we are going to need throughout this document. Must be run before any other block.
 
 ```{r}
-
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library(conflicted)
+library(pwr)
 conflict_prefer("filter", "dplyr")
 conflict_prefer("lag", "dplyr")
 conflict_prefer("select", "dplyr")
@@ -100,7 +100,7 @@ missing_summary
 
 ## Deleting rows
 
-Since there aren't many missing values and imputing them could degrade the data quality, we decided to remove them.
+Since there aren't many missing values and imputing them could degrade the data quality, we decided to remove them based on a sufficient amount of data and the potential deterioration if the values were replaced with other ones.
 
 ```{r}
 rows_before <- nrow(df)
@@ -112,6 +112,21 @@ df <- na.omit(df)
 # Step 3: Count rows after removing NA
 rows_after <- nrow(df)
 print(paste("Rows after removing NA:", rows_after))
+```
+
+To determine whether our sample remained sufficient after data removal, we performed a power analysis, which yielded a positive result, indicating that the sample is still adequate.
+
+```{r}
+predictors <- 13 
+observations <- rows_after  
+effect_size <- 0.15 
+
+power_test <- pwr.f2.test(u = predictors,
+                          v = observations - predictors - 1,
+                          f2 = effect_size,
+                          sig.level = 0.05)
+
+print(power_test)
 ```
 
 ## Encoding
@@ -203,7 +218,7 @@ df <- df %>% mutate(Price_log = log10(Price + 1))
 
 ### Outliers
 
-Since we found out during EDA that the data contains outliers, we decided to remove them
+Since we found out during EDA that the data contains outliers, we decided to remove them using a custom IQR range based on the 5th and 95th percentile.
 
 ```{r}
 detect_outliers_iqr <- function(df, remove = FALSE) {
