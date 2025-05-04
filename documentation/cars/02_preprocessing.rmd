@@ -103,13 +103,34 @@ print(paste("Rows after removing NA:", rows_after))
 Because data contain a lot of categorical attributes that are relevant to our goal, we've created the following function. This function performs so-called **Target Encoding** which is different from standard one-hot encoding in that that is encodes the categories based on how strong impact the predictor has on the target. Higher average price for the particular predictors means higher assigned number.
 
 ```{r}
-target.encode <- function(df, target, col) {
-  # Convert column name to symbol for tidy evaluation
+# target.encode <- function(df, target, col) {
+#   # Convert column name to symbol for tidy evaluation
+#   col_sym <- sym(col)
+#   encoded_col_name <- paste0(col, "_encoded")
+#   
+#   # Step 1: Calculate mean target per group
+#   avg_target <- df %>%
+#     group_by(!!col_sym) %>%
+#     summarise(mean_target = mean(.data[[target]], na.rm = TRUE), .groups = "drop") %>%
+#     arrange(mean_target)
+# 
+#   # Step 2: Assign ranks
+#   avg_target <- avg_target %>%
+#     mutate(!!encoded_col_name := as.numeric(factor(mean_target, levels = unique(mean_target))) - 1)
+# 
+#   # Step 3: Join encoded column back to original dataframe
+#   df <- df %>%
+#     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
+# 
+#   return(df)
+# }
+
+target.encode <- function(train_df, test_df, target, col) {
   col_sym <- sym(col)
   encoded_col_name <- paste0(col, "_encoded")
-  
-  # Step 1: Calculate mean target per group
-  avg_target <- df %>%
+
+  # Step 1: Calculate mean target per group (train set only)
+  avg_target <- train_df %>%
     group_by(!!col_sym) %>%
     summarise(mean_target = mean(.data[[target]], na.rm = TRUE), .groups = "drop") %>%
     arrange(mean_target)
@@ -118,20 +139,41 @@ target.encode <- function(df, target, col) {
   avg_target <- avg_target %>%
     mutate(!!encoded_col_name := as.numeric(factor(mean_target, levels = unique(mean_target))) - 1)
 
-  # Step 3: Join encoded column back to original dataframe
-  df <- df %>%
+  # Step 3: Join encoded column to both train and test
+  train_df <- train_df %>%
     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
 
-  return(df)
+  test_df <- test_df %>%
+    left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
+
+  # Optionally fill NAs in test set (unseen categories) with a default, e.g. median or -1
+  test_df[[encoded_col_name]][is.na(test_df[[encoded_col_name]])] <- -1
+
+  return(list(train = train_df, test = test_df))
 }
 ```
 
 ```{r}
 COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission', 'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType')
 
+set.seed(123)  # For reproducibility
 
-df <- reduce(COLS_TO_ENCODE, ~ target.encode(df = .x, target = TARGET, col = .y), .init = df)
+train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
+train_data <- df[train_index, ]
+test_data  <- df[-train_index, ]
 
+# 
+# df <- reduce(COLS_TO_ENCODE, ~ target.encode(df = .x, target = TARGET, col = .y), .init = df)
+# 
+# df
+
+for (col in COLS_TO_ENCODE) {
+  encoded <- target.encode(train_data, test_data, target = "Price", col = col)
+  train_data <- encoded$train
+  test_data  <- encoded$test
+}
+
+df <- rbind(train_data, test_data)
 df
 ```
 
