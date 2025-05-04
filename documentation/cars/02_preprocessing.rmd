@@ -58,7 +58,7 @@ colnames(df)[colnames(df) == "Car/Suv"] <- "Car_Suv"
 
 PREDICTORS <- c('Brand', 'Year', 'Model', 
                 'Car_Suv', 'UsedOrNew', 
-                'Transmission', 'Kilometres')
+                'Transmission', 'Kilometres', 'Location', 'Engine',     'ColourExtInt', 'FuelType','DriveType','BodyType')
 TARGET <- 'Price'
 
 df <- df[, c(PREDICTORS, TARGET)]
@@ -127,7 +127,7 @@ target.encode <- function(df, target, col) {
 ```
 
 ```{r}
-COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission')
+COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission', 'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType')
 
 
 df <- reduce(COLS_TO_ENCODE, ~ target.encode(df = .x, target = TARGET, col = .y), .init = df)
@@ -156,10 +156,25 @@ current_year <- as.numeric(format(Sys.Date(), "%Y"))
 df$age <- current_year - df$Year
 ```
 
-## Removing columns, that are no longer need
+## Cylinders
 
 ```{r}
-df <- df %>% select(-c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission','Year','Kilometres'))
+# extract actually replaces the original column with new ones based on regex match
+df <- df %>%
+  extract(
+    Engine,                 # The source column containing engine info
+    into = c("Cylinders", "Engine_L"),  # New columns to create
+    regex = "(\\d+) cyl, (\\d+\\.?\\d*) L",  # Pattern to match
+    convert = TRUE          # Automatically convert to appropriate data types
+  )
+
+df
+```
+
+## Remowing columns, that are no longer need
+
+```{r}
+df <- df %>% select(-c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission','Year','Kilometres','Location','Engine_L','ColourExtInt','FuelType','DriveType','BodyType'))
 ```
 
 ## Handling outliers
