@@ -156,7 +156,7 @@ test_data$log_Price_pred <- predict(lm_model, newdata = test_data)
 test_data$Price_pred <- exp(test_data$log_Price_pred)
 
 # --- 1. Plot: Predicted vs. Actual (log scale) ---
-ggplot(test_data, aes(x = log(Price), y = log_Price_pred)) +
+ggplot(test_data, aes(x = Price_log, y = log_Price_pred)) +
   geom_point(alpha = 0.4, color = "blue") +
   geom_abline(slope = 1, color = "red", linetype = "dashed") +
   labs(title = "Predicted vs. Actual Prices (Log Scale)",
@@ -296,7 +296,7 @@ test_data$log_Price_pred <- predict(lm_poly_model, newdata = test_data)
 test_data$Price_pred <- exp(test_data$log_Price_pred)
 
 # --- 1. Plot: Predicted vs. Actual (log scale) ---
-ggplot(test_data, aes(x = log(Price), y = log_Price_pred)) +
+ggplot(test_data, aes(x = log(Price_log), y = log_Price_pred)) +
   geom_point(alpha = 0.4, color = "blue") +
   geom_abline(slope = 1, color = "red", linetype = "dashed") +
   labs(title = "Predicted vs. Actual Prices (Log Scale)",

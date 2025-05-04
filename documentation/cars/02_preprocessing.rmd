@@ -134,27 +134,6 @@ print(power_test)
 Because data contain a lot of categorical attributes that are relevant to our goal, we've created the following function. This function performs so-called **Target Encoding** which is different from standard one-hot encoding in that that is encodes the categories based on how strong impact the predictor has on the target. Higher average price for the particular predictors means higher assigned number.
 
 ```{r}
-# target.encode <- function(df, target, col) {
-#   # Convert column name to symbol for tidy evaluation
-#   col_sym <- sym(col)
-#   encoded_col_name <- paste0(col, "_encoded")
-#   
-#   # Step 1: Calculate mean target per group
-#   avg_target <- df %>%
-#     group_by(!!col_sym) %>%
-#     summarise(mean_target = mean(.data[[target]], na.rm = TRUE), .groups = "drop") %>%
-#     arrange(mean_target)
-# 
-#   # Step 2: Assign ranks
-#   avg_target <- avg_target %>%
-#     mutate(!!encoded_col_name := as.numeric(factor(mean_target, levels = unique(mean_target))) - 1)
-# 
-#   # Step 3: Join encoded column back to original dataframe
-#   df <- df %>%
-#     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
-# 
-#   return(df)
-# }
 
 target.encode <- function(train_df, test_df, target, col) {
   col_sym <- sym(col)
@@ -193,10 +172,6 @@ train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
 train_data <- df[train_index, ]
 test_data  <- df[-train_index, ]
 
-# 
-# df <- reduce(COLS_TO_ENCODE, ~ target.encode(df = .x, target = TARGET, col = .y), .init = df)
-# 
-# df
 
 for (col in COLS_TO_ENCODE) {
   encoded <- target.encode(train_data, test_data, target = "Price", col = col)

@@ -35,26 +35,29 @@ analysis <- eventReactive(input$run, {
 
     # Load the 'caret' package
     library(caret)
+    library(car)
 
     req(dataset())  # Ensure that dataset is available
     data <- dataset()  # Load the dataset
     
     # Define the target variable
-    TARGET <- 'Price'
+    TARGET <- c('Price', 'Price_log')
     
     # Create a new feature combining 'Brand' and 'Model' (e.g., "Toyota_Corolla")
     # data$Brand_Model_encoded <- paste(data$Brand, data$Model, sep = "_")
     
     # Define selected features for EDA (Exploratory Data Analysis)
-    EDA_selected <- c('Brand_Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 
-                        'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded', 'DriveType_encoded')
+    EDA_selected <- c('Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded', 'UsedOrNew_encoded', 'age')
     
     # Select relevant features and the target variable, and remove rows with missing values
     selected_data <- data %>% select(all_of(EDA_selected), all_of(TARGET))
-    selected_data <- selected_data %>% filter(complete.cases(.))
+    # selected_data <- selected_data %>% filter(complete.cases(.))
     
     # Summary of the selected data
     summary(selected_data)
+
+    # Fixing the random number generator to ensure the same data split every time.
+    set.seed(123) 
     
     # Split the dataset into training and testing sets (80% train, 20% test)
     train_index <- createDataPartition(selected_data$Price, p = 0.8, list = FALSE)
@@ -62,10 +65,10 @@ analysis <- eventReactive(input$run, {
     test_data  <- selected_data[-train_index, ]
     
     # Option A: Log-transform Price (training set only)
-    train_data$log_Price <- log(train_data$Price)
+    # train_data$log_Price <- log(train_data$Price)
     
     # Define the formula for the model
-    model_formula <- reformulate(EDA_selected, response = "log_Price")
+    model_formula <- reformulate(EDA_selected, response = "Price_log")
     
     # Train the linear model using cross-validation
     lm_model <- train(
@@ -77,6 +80,13 @@ analysis <- eventReactive(input$run, {
     
     # Print model coefficients
     print(summary(lm_model$finalModel))
+
+    vif_values <- car::vif(lm_model$finalModel)
+    vif_text <- paste(
+      "VIF (Variance Inflation Factor):\n",
+      paste0("  ", names(vif_values), ": ", round(vif_values, 2), collapse = "\n")
+    )
+
     
     # Predict on the test data
     test_data$log_Price_pred <- predict(lm_model, newdata = test_data)
@@ -85,7 +95,7 @@ analysis <- eventReactive(input$run, {
     test_data$Price_pred <- exp(test_data$log_Price_pred)
     
     # --- 1. Plot: Predicted vs. Actual (log scale) ---
-    log_scale_plot <- ggplot(test_data, aes(x = log(Price), y = log_Price_pred)) +
+    log_scale_plot <- ggplot(test_data, aes(x = Price_log, y = log_Price_pred)) +
         geom_point(alpha = 0.4, color = "blue") +
         geom_abline(slope = 1, color = "red", linetype = "dashed") +
         labs(title = "Predicted vs. Actual Prices (Log Scale)",
@@ -141,13 +151,13 @@ analysis <- eventReactive(input$run, {
 
         # TRAINING performance metrics
 train_predictions <- predict(lm_model$finalModel, newdata = train_data)
-residuals_train <- train_data$log_Price - train_predictions
+residuals_train <- train_data$Price_log - train_predictions
 rss_train <- sum(residuals_train^2)
 n_train <- nrow(train_data)
 p <- length(lm_model$finalModel$coefficients)  # Number of predictors incl. intercept
 rse_train <- sqrt(rss_train / (n_train - p))
 
-tss_train <- sum((train_data$log_Price - mean(train_data$log_Price))^2)
+tss_train <- sum((train_data$Price_log - mean(train_data$Price_log))^2)
 r_squared_train <- 1 - rss_train / tss_train
 adj_r_squared_train <- 1 - (1 - r_squared_train) * ((n_train - 1) / (n_train - p))
 
@@ -175,7 +185,8 @@ summary_text <- paste0(
   ", about 68% of predictions fall within ±", round(rse_train, 3), " log-units.\n",
   "  This translates to:\n",
   "    Overestimation up to ~", round((exp(rse_train) - 1) * 100), "%\n",
-  "    Underestimation up to ~", round((1 - exp(-rse_train)) * 100), "%\n"
+  "    Underestimation up to ~", round((1 - exp(-rse_train)) * 100), "%\n",
+  vif_text
 )
 
     # Return list of outputs (plots and model summary)

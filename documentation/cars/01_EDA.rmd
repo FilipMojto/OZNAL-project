@@ -110,16 +110,14 @@ First we calculate the portion of missing values for each attribute.
 
 ```{r}
 
-# For a single column (e.g., 'Seats')
 colMeans(is.na(df))      
-
-
 ```
 
 From the values we can tell that the portion ranges from 0% to 10%. We can declare that this dataset doesn't contain significant amount of missing values except for attribute *Seats*. We will recommend appropriate actions later in this document but now, for the purpose of EDA, we simply remove all rows that contain any missing values.
 
 ```{r}
 
+# just for EDA purposes, they will be handled properly later in preprocessing
 df <- df %>%
   filter(complete.cases(.))
 ```
@@ -129,28 +127,6 @@ df <- df %>%
 Because data contain a lot of categorical attributes that are relevant to our goal, we've created the following function. This function performs so-called **Target Encoding** which is different from standard one-hot encoding in that that is encodes the categories based on how strong impact the predictor has on the target. Higher average price for the particular predictors means higher assigned number.
 
 ```{r}
-
-# target.encode <- function(df, target, col) {
-#   # Convert column name to symbol for tidy evaluation
-#   col_sym <- sym(col)
-#   encoded_col_name <- paste0(col, "_encoded")
-#   
-#   # Step 1: Calculate mean target per group
-#   avg_target <- df %>%
-#     group_by(!!col_sym) %>%
-#     summarise(mean_target = mean(.data[[target]], na.rm = TRUE), .groups = "drop") %>%
-#     arrange(mean_target)
-# 
-#   # Step 2: Assign ranks
-#   avg_target <- avg_target %>%
-#     mutate(!!encoded_col_name := as.numeric(factor(mean_target, levels = unique(mean_target))) - 1)
-# 
-#   # Step 3: Join encoded column back to original dataframe
-#   df <- df %>%
-#     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
-# 
-#   return(df)
-# }
 
 target.encode <- function(train_df, test_df, target, col) {
   col_sym <- sym(col)
@@ -178,45 +154,6 @@ target.encode <- function(train_df, test_df, target, col) {
 
   return(list(train = train_df, test = test_df))
 }
-# 
-# target.encode <- function(train_df, test_df, target, col, k = 5) {
-#   col_sym <- sym(col)
-#   encoded_col_name <- paste0(col, "_encoded")
-# 
-#   global_mean <- mean(train_df[[target]], na.rm = TRUE)
-# 
-#   #computing count and mean per category
-#   avg_target <- train_df %>%
-#     group_by(!!col_sym) %>%
-#     summarise(
-#       n = n(),
-#       mean_target = mean(.data[[target]], na.rm = TRUE),
-#       .groups = "drop"
-#     )
-# 
-#   # applying smoothing regularizaiton
-#   avg_target <- avg_target %>%
-#     mutate(
-#       smoothed_target = (n * mean_target + k * global_mean) / (n + k)
-#     )
-# 
-#   # assigning encoded values based on smoothed means
-#   avg_target <- avg_target %>%
-#     mutate(!!encoded_col_name := as.numeric(factor(smoothed_target, levels = unique(smoothed_target))) - 1)
-# 
-#   # merging into train and test sets
-#   train_df <- train_df %>%
-#     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
-# 
-#   test_df <- test_df %>%
-#     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
-# 
-#   # handling unseen categories in test set
-#   test_df[[encoded_col_name]][is.na(test_df[[encoded_col_name]])] <- -1
-# 
-#   return(list(train = train_df, test = test_df))
-# }
-
 
 ```
 
@@ -228,20 +165,21 @@ These are columns that need to be encoded. We simply apply the function defined 
 
 COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission', 'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType', 'Brand_Model')
 
-set.seed(123)  # For reproducibility
+set.seed(123)
 
 
 train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
 train_data <- df[train_index, ]
 test_data  <- df[-train_index, ]
 
-
+# encoding the training and testing sets separately
 for (col in COLS_TO_ENCODE) {
   encoded <- target.encode(train_data, test_data, target = "Price", col = col)
   train_data <- encoded$train
   test_data  <- encoded$test
 }
 
+# joining the datasets into one
 df <- rbind(train_data, test_data)
 df
 
@@ -272,6 +210,10 @@ df <- df %>%
     convert = TRUE          # Automatically convert to appropriate data types
   )
 
+#some new missing values are introduced, we remove them
+df <- df %>%
+  filter(!is.na(Cylinders), !is.na(Engine_L))
+
 df
 ```
 
@@ -290,10 +232,17 @@ df
 
 ### Doors and Seats
 
+Except for the count of Seats or Doors both of these predictors also contain some text (4 doors, etc.). Thus we only keep the numeric values by executing the following code.
+
 ```{r}
 
 df$Doors_num <- as.numeric(gsub("[^0-9]", "", df$Doors))
 df$Seats_num <- as.numeric(gsub("[^0-9]", "", df$Seats))
+df$Kilometres_num <- as.numeric(gsub("[^0-9]", "", df$Kilometres))
+
+#some new missing values are introduced, we remove them
+df <- df %>%
+  filter(!is.na(Kilometres_num), !is.na(Price))
 ```
 
 After preprocessing is over, we can visualize the final dataset.
@@ -301,7 +250,6 @@ After preprocessing is over, we can visualize the final dataset.
 ```{r}
 
 df
-unique(df$UsedOrNew)
 summary(df)
 ```
 
@@ -309,16 +257,9 @@ summary(df)
 
 ### Linearity
 
-In this section we check how well do the predictors correlate with the target. We will utilize Scatterplots for that. We also try to draw a linear line in the plot to see if there is linear relationship.
+In this section we check how well the predictors correlate with the target. We utilize Scatterplots for that purpose. We also try to draw a linear line in the plot to see if there is linear relationship.
 
 ```{r}
-
-df <- df %>%
-  mutate(Kilometres_num = as.numeric(gsub("[^0-9]", "", Kilometres)))
-
-df <- df %>%
-  filter(!is.na(Kilometres_num), !is.na(Price))
-
 
 show.correlation.plot <- function(df, target, col){
   
@@ -380,12 +321,13 @@ have quite high correlation.
 
 ### Outliers
 
-We also need to visualize the proportion of outliers present in our data. To achieve this in a neat and representative way, we are going to utilize Boxplots.
+We also need to visualize the proportion of outliers present in our data. To achieve this in a neat and representative way, we are going to utilize Boxplots. We need to bin the target beforehand as it is continuous.
 
 ```{r}
 
 
 show.boxplot <- function(data, cols, target, bins = 5) {
+  # binning the data
   data <- data %>%
     mutate(target_binned = cut(.data[[target]], breaks = bins, include.lowest = TRUE))
 
@@ -395,7 +337,8 @@ show.boxplot <- function(data, cols, target, bins = 5) {
       geom_boxplot(aes(group = target_binned)) +
       labs(x = paste0(target, " (binned)"), y = .x) +
       theme_minimal() +
-      scale_x_discrete(labels = function(x) gsub(",", "\n", x))  # Wrapping long bin labels
+      # we wrap long bin labels by adding newline
+      scale_x_discrete(labels = function(x) gsub(",", "\n", x))
   )
 
   walk(plots, print)
@@ -408,7 +351,7 @@ From the boxplots we have detected quite a notable portion of outliers. Certain 
 
 ### Target Distribution
 
-We also need to check the distribution of the target variable to see how balanced the dataset is. We have found out that the prices are highly skewed. By applying the log scale we can deal with these extremes values. Thus, we plot two histograms comparing the original distribution against the log-scaled distribution.
+We also need to check the distribution of the target variable to see how balanced the dataset is. We have found out that the prices are highly skewed. By applying the log scale we can deal with these extremes values. Thus, we plot two histograms comparing the original distribution against the log-scaled distribution. For better readability, we are going to utilize scale_x_log10() function which keeps the original price values which are displayed on x-axis but the distribution is now scaled.
 
 ```{r}
 
@@ -425,7 +368,7 @@ ggplot(df, aes(x = Price)) +
 # Histogram with log scale
 ggplot(df, aes(x = Price)) +
   geom_histogram(fill = "skyblue", color = "black", bins = 30) +
-  scale_x_log10(labels = scales::comma) +  # Log scale for skewed data
+  scale_x_log10(labels = scales::dollar) +  # Log scale for skewed data
   labs(
     title = "Distribution of Vehicle Prices (Log Scale)",
     x = "Price (Log10 Scale)",
