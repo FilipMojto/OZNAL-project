@@ -147,15 +147,17 @@ summary(lm_model$finalModel)
 
 <!-- -->
 
--    The **residual standard error is 0.2491**, which means that about **68% of predictions fall within ±0.249 log-units** of the actual log-price.
+-   The **residual standard error is 0.2491**, which means that about **68% of predictions fall within ±0.249 log-units** of the actual log-price.
 
 <!-- -->
 
--    Converting this error back to the original price scale:
+-   Converting this error back to the original price scale:
 
-    -    `exp(0.249) ≈ 1.28` → predictions may overestimate true price by up to **28%**.
+```         
+-    `exp(0.249) ≈ 1.28` → predictions may overestimate true price by up to **28%**.
 
-    -    `exp(-0.249) ≈ 0.78` → predictions may underestimate true price by up to **22%**.
+-    `exp(-0.249) ≈ 0.78` → predictions may underestimate true price by up to **22%**.
+```
 
 <!-- -->
 
@@ -165,7 +167,7 @@ summary(lm_model$finalModel)
 
 <!-- -->
 
--    **All coefficients are highly statistically significant (p \< 0.001)**, supporting their relevance in predicting `log_Price`.
+-   **All coefficients are highly statistically significant (p \< 0.001)**, supporting their relevance in predicting `log_Price`.
 
 ### Multicollinearity
 
@@ -296,5 +298,133 @@ p2
 From the plots we can tell that residuals are scattered quite normally around zero. Even though loess can catch non-linear relationships, the smooth line shows almost perfect linear match with the horizontal line. From the QQPlot we can see that they almost perfectly follow the line, though there are deviated values (tails).
 
 ## Polynomial Regression
+
+Based on EDA we decided to add Model and Brand to power of 3.
+
+```{r}
+train_data$Brand_Model_encoded3 <- train_data$Brand_Model_encoded^3
+train_data$Kilometres_num2 <- train_data$Kilometres_num^2
+```
+
+```{r}
+
+EDA_selected = c('Brand_Model_encoded3', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num2', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded')
+
+
+model_formula_poly <- reformulate(EDA_selected, response = "log_Price")
+
+lm_poly_model <- train(
+  model_formula_poly,
+  data = train_data,
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 5)
+)
+
+# View the model
+summary(lm_poly_model$finalModel)
+
+```
+
+R-square error represents % of variance in log_Price explained by our model (0.72 = 72%)
+
+### Predicted vs. Actual - Log Scale
+
+```{r}
+# Predict on test data
+test_data$Brand_Model_encoded3 <- test_data$Brand_Model_encoded^3
+test_data$Kilometres_num2 <- test_data$Kilometres_num^2
+test_data$log_Price_pred <- predict(lm_poly_model, newdata = test_data)
+
+# To revert to the unscaled values, we calculate the exponent of the logged values
+test_data$Price_pred <- exp(test_data$log_Price_pred)
+
+# --- 1. Plot: Predicted vs. Actual (log scale) ---
+ggplot(test_data, aes(x = log(Price), y = log_Price_pred)) +
+  geom_point(alpha = 0.4, color = "blue") +
+  geom_abline(slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "Predicted vs. Actual Prices (Log Scale)",
+       x = "Actual log(Price)", y = "Predicted log(Price)") +
+  theme_minimal()
+
+# --- 2. Plot: Predicted vs. Actual (original price scale) ---
+ggplot(test_data, aes(x = Price, y = Price_pred)) +
+  geom_point(alpha = 0.4, color = "darkgreen") +
+  geom_abline(slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "Predicted vs. Actual Prices (Original Scale)",
+       x = "Actual Price", y = "Predicted Price") +
+  scale_x_continuous(labels = scales::dollar) +
+  scale_y_continuous(labels = scales::dollar) +
+  theme_minimal()
+
+```
+
+### Residuals
+
+```{r}
+# residuals <- residuals(lm_model$finalModel)
+# Extract residuals and fitted values
+model_data <- data.frame(
+  Fitted = fitted(lm_model$finalModel),
+  Residuals = residuals(lm_model$finalModel)
+)
+
+# Converting to dataframe for ggplot
+# residuals_df <- data.frame(Residuals = residuals)
+
+# Creating histogram with density overlay with density curve
+ggplot(model_data, aes(x = Residuals)) +
+  geom_histogram(
+    aes(y = after_stat(density)), 
+    bins = 50,
+    fill = "steelblue",
+    color = "white",
+    alpha = 0.8
+  ) +
+  geom_density(color = "red", linewidth = 1) + 
+  labs(
+    title = "Distribution of Model Residuals",
+    x = "Residuals (Actual - Predicted Price)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+```
+
+### Homoscedacity
+
+```{r}
+# Residuals vs. Fitted Plot
+p1 <- ggplot(model_data, aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  geom_smooth(method = "loess", color = "darkgreen", se = FALSE) +
+  labs(
+    title = "Residuals vs. Fitted Values",
+    subtitle = "Check for homoscedasticity (constant variance)",
+    x = "Fitted Values (Predicted Price)",
+    y = "Residuals (Actual - Predicted)"
+  ) +
+  theme_minimal()
+
+p1
+```
+
+### QQ Plot
+
+```{r}
+# QQ-Plot
+p2 <- ggplot(model_data, aes(sample = Residuals)) +
+  stat_qq(color = "steelblue") +
+  stat_qq_line(color = "red", linetype = "dashed") +
+  labs(
+    title = "Normal Q-Q Plot",
+    subtitle = "Check for normality of residuals",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  ) +
+  theme_minimal()
+
+p2
+```
 
 ## Conclusion
