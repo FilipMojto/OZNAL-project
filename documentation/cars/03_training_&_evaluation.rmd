@@ -303,8 +303,9 @@ R-square error represents % of variance in log_Price explained by our model (0.8
 
 ```{r}
 # Predict on test data
-test_data$Brand_Model_encoded3 <- test_data$Brand_Model_encoded^3
 test_data$Kilometres_num2 <- test_data$Kilometres_num^2
+test_data$age2 <- test_data$age^2
+test_data$Cylinders2 <- test_data$Cylinders^2
 test_data$log_Price_pred <- predict(lm_poly_model, newdata = test_data)
 
 # To revert to the unscaled values, we calculate the exponent of the logged values
