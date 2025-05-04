@@ -35,18 +35,26 @@ analysis <- eventReactive(input$run, {
 
     # Load the 'caret' package
     library(caret)
+<<<<<<< HEAD
     library(car)
+=======
+>>>>>>> f9ce98b0e0646e9e522d8dbb680cf6cdb5c93dbb
 
     req(dataset())  # Ensure that dataset is available
     data <- dataset()  # Load the dataset
     
     # Define the target variable
+<<<<<<< HEAD
     TARGET <- c('Price', 'Price_log')
+=======
+    TARGET <- 'Price'
+>>>>>>> f9ce98b0e0646e9e522d8dbb680cf6cdb5c93dbb
     
     # Create a new feature combining 'Brand' and 'Model' (e.g., "Toyota_Corolla")
     # data$Brand_Model_encoded <- paste(data$Brand, data$Model, sep = "_")
     
     # Define selected features for EDA (Exploratory Data Analysis)
+<<<<<<< HEAD
     EDA_selected <- c('Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded', 'UsedOrNew_encoded', 'age')
     
     # Select relevant features and the target variable, and remove rows with missing values
@@ -58,6 +66,17 @@ analysis <- eventReactive(input$run, {
 
     # Fixing the random number generator to ensure the same data split every time.
     set.seed(123) 
+=======
+    EDA_selected <- c('Brand_Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 
+                        'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded', 'DriveType_encoded')
+    
+    # Select relevant features and the target variable, and remove rows with missing values
+    selected_data <- data %>% select(all_of(EDA_selected), all_of(TARGET))
+    selected_data <- selected_data %>% filter(complete.cases(.))
+    
+    # Summary of the selected data
+    summary(selected_data)
+>>>>>>> f9ce98b0e0646e9e522d8dbb680cf6cdb5c93dbb
     
     # Split the dataset into training and testing sets (80% train, 20% test)
     train_index <- createDataPartition(selected_data$Price, p = 0.8, list = FALSE)
@@ -65,10 +84,17 @@ analysis <- eventReactive(input$run, {
     test_data  <- selected_data[-train_index, ]
     
     # Option A: Log-transform Price (training set only)
+<<<<<<< HEAD
     # train_data$log_Price <- log(train_data$Price)
     
     # Define the formula for the model
     model_formula <- reformulate(EDA_selected, response = "Price_log")
+=======
+    train_data$log_Price <- log(train_data$Price)
+    
+    # Define the formula for the model
+    model_formula <- reformulate(EDA_selected, response = "log_Price")
+>>>>>>> f9ce98b0e0646e9e522d8dbb680cf6cdb5c93dbb
     
     # Train the linear model using cross-validation
     lm_model <- train(
@@ -80,6 +106,7 @@ analysis <- eventReactive(input$run, {
     
     # Print model coefficients
     print(summary(lm_model$finalModel))
+<<<<<<< HEAD
 
     vif_values <- car::vif(lm_model$finalModel)
     vif_text <- paste(
@@ -87,6 +114,8 @@ analysis <- eventReactive(input$run, {
       paste0("  ", names(vif_values), ": ", round(vif_values, 2), collapse = "\n")
     )
 
+=======
+>>>>>>> f9ce98b0e0646e9e522d8dbb680cf6cdb5c93dbb
     
     # Predict on the test data
     test_data$log_Price_pred <- predict(lm_model, newdata = test_data)
@@ -95,7 +124,11 @@ analysis <- eventReactive(input$run, {
     test_data$Price_pred <- exp(test_data$log_Price_pred)
     
     # --- 1. Plot: Predicted vs. Actual (log scale) ---
+<<<<<<< HEAD
     log_scale_plot <- ggplot(test_data, aes(x = Price_log, y = log_Price_pred)) +
+=======
+    log_scale_plot <- ggplot(test_data, aes(x = log(Price), y = log_Price_pred)) +
+>>>>>>> f9ce98b0e0646e9e522d8dbb680cf6cdb5c93dbb
         geom_point(alpha = 0.4, color = "blue") +
         geom_abline(slope = 1, color = "red", linetype = "dashed") +
         labs(title = "Predicted vs. Actual Prices (Log Scale)",
