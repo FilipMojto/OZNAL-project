@@ -144,13 +144,7 @@ summary(lm_model$finalModel)
 ```
 
 -   The model shows an **R-squared of 0.8508**, meaning **approximately 85.1% of the variance in `log_Price` is explained** by the included predictors. This indicates a strong model fit.
-
-<!-- -->
-
 -   The **residual standard error is 0.2491**, which means that about **68% of predictions fall within ±0.249 log-units** of the actual log-price.
-
-<!-- -->
-
 -   Converting this error back to the original price scale:
 
 ```         
@@ -159,13 +153,9 @@ summary(lm_model$finalModel)
 -    `exp(-0.249) ≈ 0.78` → predictions may underestimate true price by up to **22%**.
 ```
 
-<!-- -->
-
 -   The **adjusted R-squared is nearly identical to the R-squared (0.8507)**, indicating that all included predictors are contributing meaningfully and that **overfitting is unlikely**.
 
 -   The **F-statistic is extremely high (6547)** with a **p-value \< 2.2e-16**, showing that the model significantly improves upon the null model.
-
-<!-- -->
 
 -   **All coefficients are highly statistically significant (p \< 0.001)**, supporting their relevance in predicting `log_Price`.
 
@@ -304,11 +294,13 @@ Based on EDA we decided to add Model and Brand to power of 3.
 ```{r}
 train_data$Brand_Model_encoded3 <- train_data$Brand_Model_encoded^3
 train_data$Kilometres_num2 <- train_data$Kilometres_num^2
+train_data$age2 <- train_data$age^2
+train_data$Cylinders2 <- train_data$Cylinders^2
 ```
 
 ```{r}
 
-EDA_selected = c('Brand_Model_encoded3', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num2', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded')
+EDA_selected = c('Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num2', 'Cylinders2', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded', 'age2')
 
 
 model_formula_poly <- reformulate(EDA_selected, response = "log_Price")

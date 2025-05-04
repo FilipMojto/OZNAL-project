@@ -178,33 +178,66 @@ target.encode <- function(train_df, test_df, target, col) {
 
   return(list(train = train_df, test = test_df))
 }
+# 
+# target.encode <- function(train_df, test_df, target, col, k = 5) {
+#   col_sym <- sym(col)
+#   encoded_col_name <- paste0(col, "_encoded")
+# 
+#   global_mean <- mean(train_df[[target]], na.rm = TRUE)
+# 
+#   #computing count and mean per category
+#   avg_target <- train_df %>%
+#     group_by(!!col_sym) %>%
+#     summarise(
+#       n = n(),
+#       mean_target = mean(.data[[target]], na.rm = TRUE),
+#       .groups = "drop"
+#     )
+# 
+#   # applying smoothing regularizaiton
+#   avg_target <- avg_target %>%
+#     mutate(
+#       smoothed_target = (n * mean_target + k * global_mean) / (n + k)
+#     )
+# 
+#   # assigning encoded values based on smoothed means
+#   avg_target <- avg_target %>%
+#     mutate(!!encoded_col_name := as.numeric(factor(smoothed_target, levels = unique(smoothed_target))) - 1)
+# 
+#   # merging into train and test sets
+#   train_df <- train_df %>%
+#     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
+# 
+#   test_df <- test_df %>%
+#     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
+# 
+#   # handling unseen categories in test set
+#   test_df[[encoded_col_name]][is.na(test_df[[encoded_col_name]])] <- -1
+# 
+#   return(list(train = train_df, test = test_df))
+# }
+
+
 ```
 
 ### Target Encoding
 
-These are columns that need to be encoded. We simply apply the function defined above on each of them.
+These are columns that need to be encoded. We simply apply the function defined above on each of them. We are applying the target encoding on training and testing set separately to prevent data leakage.
 
 ```{r}
 
 COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission', 'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType', 'Brand_Model')
-# 
-# 
-# df <- reduce(COLS_TO_ENCODE, ~ target.encode(df = .x, target = TARGET, col = .y), .init = df)
 
+set.seed(123)  # For reproducibility
 
-library(caret)
 
 train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
 train_data <- df[train_index, ]
 test_data  <- df[-train_index, ]
 
 
-
-# COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission',
-#                     'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType', 'Brand_Model')
-
 for (col in COLS_TO_ENCODE) {
-  encoded <- target.encode(train_data, test_data, target = "Price", col = col)
+  encoded <- target.encode(train_data, test_data, target = "Price", col = col, k = 10)
   train_data <- encoded$train
   test_data  <- encoded$test
 }
