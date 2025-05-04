@@ -158,8 +158,9 @@ df$age <- current_year - df$Year
 
 ## Cylinders
 
+Extract actually replaces the original column with new ones based on regex match
+
 ```{r}
-# extract actually replaces the original column with new ones based on regex match
 df <- df %>%
   extract(
     Engine,                 # The source column containing engine info
@@ -200,50 +201,38 @@ df <- df %>% mutate(Price_log = log10(Price + 1))
 
 ```
 
-### Other outliers
+### Outliers
 
 ```{r}
 detect_outliers_iqr <- function(df, remove = FALSE) {
-  # Work only with numeric columns
   num_cols <- df[, sapply(df, is.numeric), drop = FALSE]
   
-  # Store logical matrix of outlier flags
-  outlier_flags <- as.data.frame(matrix(FALSE, nrow = nrow(df), ncol = ncol(num_cols)))
-  names(outlier_flags) <- names(num_cols)
+  outlier_flags <- matrix(FALSE, nrow = nrow(df), ncol = ncol(num_cols))
   
-  # Loop over each numeric column
-  for (colname in names(num_cols)) {
-    x <- num_cols[[colname]]
-    Q1 <- quantile(x, 0.25, na.rm = TRUE)
-    Q3 <- quantile(x, 0.75, na.rm = TRUE)
+  for (i in seq_along(num_cols)) {
+    x <- num_cols[[i]]
+    Q1 <- quantile(x, 0.05, na.rm = TRUE)
+    Q3 <- quantile(x, 0.95, na.rm = TRUE)
     IQR_val <- IQR(x, na.rm = TRUE)
     
     lower <- Q1 - 1.5 * IQR_val
     upper <- Q3 + 1.5 * IQR_val
     
-    outlier_flags[[colname]] <- x < lower | x > upper
+    outlier_flags[, i] <- x < lower | x > upper
   }
   
-  # Combine into summary
-  outlier_summary <- data.frame(
-    Column = names(num_cols),
-    Outlier_Count = colSums(outlier_flags, na.rm = TRUE)
-  )
-  
-  # Optionally remove rows with any outliers
   if (remove) {
-    # Remove any rows with outliers in any column
     df <- df[!apply(outlier_flags, 1, any), ]
   }
   
-  return(list(
-    cleaned_df = df,
-    outlier_flags = outlier_flags,
-    outlier_summary = outlier_summary
-  ))
+  return(df)
 }
 
 
+```
+
+```{r}
+df<- detect_outliers_iqr(df, remove = TRUE)
 ```
 
 ## Save data for training
