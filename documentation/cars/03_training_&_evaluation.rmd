@@ -58,7 +58,7 @@ TARGET = 'Price'
 # Create a new feature combining Brand + Model (e.g., "Toyota_Corolla")
 
 
-EDA_selected = c('Brand_Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded', 'UsedOrNew_encoded', 'age')
+EDA_selected = c('Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num', 'Cylinders', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded', 'UsedOrNew_encoded', 'age')
   
 selected_data <- df %>% select(all_of(EDA_selected), all_of(TARGET))
 selected_data <- selected_data %>% filter(complete.cases(.))
@@ -147,15 +147,17 @@ summary(lm_model$finalModel)
 
 <!-- -->
 
--    The **residual standard error is 0.2491**, which means that about **68% of predictions fall within ±0.249 log-units** of the actual log-price.
+-   The **residual standard error is 0.2491**, which means that about **68% of predictions fall within ±0.249 log-units** of the actual log-price.
 
 <!-- -->
 
--    Converting this error back to the original price scale:
+-   Converting this error back to the original price scale:
 
-    -    `exp(0.249) ≈ 1.28` → predictions may overestimate true price by up to **28%**.
+```         
+-    `exp(0.249) ≈ 1.28` → predictions may overestimate true price by up to **28%**.
 
-    -    `exp(-0.249) ≈ 0.78` → predictions may underestimate true price by up to **22%**.
+-    `exp(-0.249) ≈ 0.78` → predictions may underestimate true price by up to **22%**.
+```
 
 <!-- -->
 
@@ -165,7 +167,7 @@ summary(lm_model$finalModel)
 
 <!-- -->
 
--    **All coefficients are highly statistically significant (p \< 0.001)**, supporting their relevance in predicting `log_Price`.
+-   **All coefficients are highly statistically significant (p \< 0.001)**, supporting their relevance in predicting `log_Price`.
 
 ### Multicollinearity
 
