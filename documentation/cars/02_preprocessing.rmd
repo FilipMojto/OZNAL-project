@@ -66,6 +66,22 @@ df
 
 ```
 
+## Cylinders
+
+Extract actually replaces the original column with new ones based on regex match
+
+```{r}
+df <- df %>%
+  extract(
+    Engine,                 # The source column containing engine info
+    into = c("Cylinders", "Engine_L"),  # New columns to create
+    regex = "(\\d+) cyl, (\\d+\\.?\\d*) L",  # Pattern to match
+    convert = TRUE          # Automatically convert to appropriate data types
+  )
+
+df
+```
+
 ## Missing values
 
 After reviewing the data, we discovered that some records appeared empty but contained a character, so we corrected them.
@@ -198,22 +214,6 @@ current_year <- as.numeric(format(Sys.Date(), "%Y"))
 df$age <- current_year - df$Year
 ```
 
-## Cylinders
-
-Extract actually replaces the original column with new ones based on regex match
-
-```{r}
-df <- df %>%
-  extract(
-    Engine,                 # The source column containing engine info
-    into = c("Cylinders", "Engine_L"),  # New columns to create
-    regex = "(\\d+) cyl, (\\d+\\.?\\d*) L",  # Pattern to match
-    convert = TRUE          # Automatically convert to appropriate data types
-  )
-
-df
-```
-
 ## Remowing columns, that are no longer need
 
 ```{r}
@@ -244,6 +244,8 @@ df <- df %>% mutate(Price_log = log10(Price + 1))
 ```
 
 ### Outliers
+
+Since we found out during EDA that the data contains outliers, we decided to remove them
 
 ```{r}
 detect_outliers_iqr <- function(df, remove = FALSE) {
