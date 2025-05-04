@@ -467,7 +467,9 @@ During performing EDA we have found out that:
 
     b)  -/- in *ColourExtInt*
 
-    c)  in *Cylinders*, *CylindersinEngine*
+    c)  '-' in some of the attributes
+
+    d)  in *Cylinders*, *CylindersinEngine*
 
 -   For target, we have detected quite skewed distribution -\> Log Scale.
 
