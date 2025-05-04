@@ -46,7 +46,7 @@ conflict_prefer("select", "dplyr")
 
 paste("Loading dataset from '", getwd(), "'")
 
-df <- read_csv("../../data/preprocessed/cars_v1.csv", show_col_types = FALSE)
+df <- read_csv("../../data/preprocessed/cars_v2.csv", show_col_types = FALSE)
 summary(df)
 ```
 
@@ -69,25 +69,6 @@ summary(selected_data)
 ## Linear Regression
 
 EDA showed roughly linear relationships between predictors and log target. Thus, we are going to try to fit Linear Regression on this problem.
-
-### Outliers
-
-```{r}
-
-# Function to winsorize
-winsorize <- function(x, limits = c(0.01, 0.99)) {
-  x[x < quantile(x, limits[1], na.rm = TRUE)] <- quantile(x, limits[1], na.rm = TRUE)
-  x[x > quantile(x, limits[2], na.rm = TRUE)] <- quantile(x, limits[2], na.rm = TRUE)
-  x
-}
-
-# Apply to new features
-selected_data <- selected_data %>%
-  mutate(across(
-    all_of(EDA_selected),  # Use all_of() for safety
-    winsorize
-  ))
-```
 
 ### Train/Test Split
 
@@ -289,10 +270,9 @@ From the plots we can tell that residuals are scattered quite normally around ze
 
 ## Polynomial Regression
 
-Based on EDA we decided to add Model and Brand to power of 3.
+Based on EDA we decided to add some predictors to power of 2.
 
 ```{r}
-train_data$Brand_Model_encoded3 <- train_data$Brand_Model_encoded^3
 train_data$Kilometres_num2 <- train_data$Kilometres_num^2
 train_data$age2 <- train_data$age^2
 train_data$Cylinders2 <- train_data$Cylinders^2
@@ -300,7 +280,7 @@ train_data$Cylinders2 <- train_data$Cylinders^2
 
 ```{r}
 
-EDA_selected = c('Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num2', 'Cylinders2', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded', 'age2')
+EDA_selected = c('Model_encoded', 'Location_encoded', 'Car_Suv_encoded', 'Kilometres_num2', 'Cylinders2', 'ColourExtInt_encoded', 'FuelType_encoded','DriveType_encoded','age2')
 
 
 model_formula_poly <- reformulate(EDA_selected, response = "log_Price")
@@ -317,7 +297,7 @@ summary(lm_poly_model$finalModel)
 
 ```
 
-R-square error represents % of variance in log_Price explained by our model (0.72 = 72%)
+R-square error represents % of variance in log_Price explained by our model (0.82 = 82%)
 
 ### Predicted vs. Actual - Log Scale
 

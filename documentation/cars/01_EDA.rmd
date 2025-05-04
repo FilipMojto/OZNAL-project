@@ -237,7 +237,7 @@ test_data  <- df[-train_index, ]
 
 
 for (col in COLS_TO_ENCODE) {
-  encoded <- target.encode(train_data, test_data, target = "Price", col = col, k = 10)
+  encoded <- target.encode(train_data, test_data, target = "Price", col = col)
   train_data <- encoded$train
   test_data  <- encoded$test
 }
