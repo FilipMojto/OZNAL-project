@@ -70,25 +70,6 @@ summary(selected_data)
 
 EDA showed roughly linear relationships between predictors and log target. Thus, we are going to try to fit Linear Regression on this problem.
 
-### Outliers
-
-```{r}
-
-# Function to winsorize
-winsorize <- function(x, limits = c(0.01, 0.99)) {
-  x[x < quantile(x, limits[1], na.rm = TRUE)] <- quantile(x, limits[1], na.rm = TRUE)
-  x[x > quantile(x, limits[2], na.rm = TRUE)] <- quantile(x, limits[2], na.rm = TRUE)
-  x
-}
-
-# Apply to new features
-selected_data <- selected_data %>%
-  mutate(across(
-    all_of(EDA_selected),  # Use all_of() for safety
-    winsorize
-  ))
-```
-
 ### Train/Test Split
 
 Now we can final train the model. First we are going to follow the best practices for machine learning workflow by splitting the data into training and testing dataset. By doing so, we are going to preserve the data integrity. This is because we only apply cross validation on the training set to avoid data leakage and the testing set remains unseen.
@@ -326,7 +307,7 @@ summary(lm_poly_model$finalModel)
 
 ```
 
-R-square error represents % of variance in log_Price explained by our model (0.72 = 72%)
+R-square error represents % of variance in log_Price explained by our model (0.82 = 82%)
 
 ### Predicted vs. Actual - Log Scale
 
