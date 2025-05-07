@@ -1,4 +1,5 @@
 ---
+<<<<<<< HEAD
 title: "EDA for OZNAL project"
 author: "Filip Remšík, Filip Mojto"
 date: "`r Sys.Date()`" # the date updates automatically when rendered
@@ -492,3 +493,24 @@ Some predictors **did not fulfill the condition of homoscedasticity**. Their res
 -   **Parameter tunning** is recommended.
 
     > We definitely recommend trying this model!
+=======
+title: "The example project workflow"
+author: "Jan Sliacky"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+print("dssd")
+```
+>>>>>>> 6162661d2ed60649ff97115f0b7b3d63ba4cc4e6

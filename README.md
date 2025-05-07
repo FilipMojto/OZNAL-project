@@ -1,11 +1,10 @@
 # OZNAL-project
-
 Contains implementation of a full pipeline of a ML model.
 
 ## 📁 Project Structure
 
 ```
-CPE_model/
+project-name/
 ├── 01_summary/               # One-pager summary (non-technical overview)
 ├── 02_documentation/         # R Markdown technical documentation
 ├── 03_shiny_app/             # Interactive Shiny app
