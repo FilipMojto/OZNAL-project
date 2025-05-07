@@ -53,6 +53,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libtiff5-dev \
     pkg-config \
     build-essential \
+    cmake \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ## update system libraries
