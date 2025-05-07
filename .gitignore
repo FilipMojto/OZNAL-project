@@ -12,4 +12,9 @@ OZNAL-project.code-workspace
 /shiny_app/app/.RData
 /shiny_app/app/.Rproj.user
 /shiny_app/app/.Rproj
+/shiny_app/.RData
+/shiny_app/.Rhistory
+/shiny_app/.Rprofile
+/shiny_app/.Rproj.user
+/shiny_app/.Rproj
 /docs
