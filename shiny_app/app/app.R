@@ -1,6 +1,12 @@
 library(shiny)
 library(tidyverse)
 library(patchwork)
+library(caret)
+
+# Ensure caret is properly loaded
+if (!requireNamespace("caret", quietly = TRUE)) {
+  install.packages("caret")
+}
 
 ui <- fluidPage(
   titlePanel("Linear Model with Training and Testing Split"),
@@ -105,7 +111,7 @@ analysis <- eventReactive(input$run, {
     )
 
     
-    # Predict on the test data
+                              # Predict on the test data
     test_data$log_Price_pred <- predict(lm_model, newdata = test_data)
     
     # Revert to the original price scale using the exponent function
@@ -258,6 +264,11 @@ analysis <- eventReactive(input$run, {
         layout = (log_scale_plot / original_scale_plot) | (residuals_plot / (homoscedasticity_plot | qqplot)),  # Combine the plots
         summary = summary_text  # Return model summary
     )}
+    else if (input$model == "poly") {
+        # Polynomial regression logic here (if needed)
+        # For now, just return a message
+        return("Polynomial regression is not implemented yet.")
+    }
     })
 
     # Output the layout of the plots
