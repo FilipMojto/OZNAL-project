@@ -1,4 +1,5 @@
 ---
+get---
 title: "EDA for OZNAL project"
 author: "Filip Remšík, Filip Mojto"
 date: "`r Sys.Date()`" # the date updates automatically when rendered
@@ -153,7 +154,7 @@ Now let's visualize the predicted vs. actual values. This time we are going to m
 test_data$log_Price_pred <- predict(lm_model, newdata = test_data)
 
 # To revert to the unscaled values, we calculate the exponent of the logged values
-test_data$Price_pred <- exp(test_data$log_Price_pred)
+test_data$Price_pred <- 10 ^ test_data$log_Price_pred
 
 # --- 1. Plot: Predicted vs. Actual (log scale) ---
 ggplot(test_data, aes(x = Price_log, y = log_Price_pred)) +
