@@ -267,6 +267,7 @@ detect_outliers_iqr <- function(df, remove = FALSE) {
 
 ```{r}
 df<- detect_outliers_iqr(df, remove = TRUE)
+df
 ```
 
 ## Save data for training

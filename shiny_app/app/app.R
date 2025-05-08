@@ -1,7 +1,7 @@
 library(shiny)
 library(tidyverse)
 library(patchwork)
-library(caret)
+
 
 # Ensure caret is properly loaded
 if (!requireNamespace("caret", quietly = TRUE)) {
@@ -58,7 +58,7 @@ analysis <- eventReactive(input$run, {
     data <- dataset()  # Load the dataset
     
     # Define the target variable
-
+    TARGET <- c('Price', 'Price_log')
     if (input$model == "lm") {
 
     # Create a new feature combining 'Brand' and 'Model' (e.g., "Toyota_Corolla")

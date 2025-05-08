@@ -294,7 +294,7 @@ test_data$Cylinders2 <- test_data$Cylinders^2
 test_data$log_Price_pred <- predict(lm_poly_model, newdata = test_data)
 
 # To revert to the unscaled values, we calculate the exponent of the logged values
-test_data$Price_pred <- exp(test_data$log_Price_pred)
+test_data$Price_pred <- 10 ^ test_data$log_Price_pred
 
 # --- 1. Plot: Predicted vs. Actual (log scale) ---
 ggplot(test_data, aes(x = log(Price_log), y = log_Price_pred)) +

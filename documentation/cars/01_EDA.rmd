@@ -109,6 +109,7 @@ We already identified some anomalies in the data that need to be dealt with befo
 First we calculate the portion of missing values for each attribute.
 
 ```{r}
+# Takes the column-wise means of that logical matrix. In R, TRUE is coerced to 1 and FALSE to 0, so the mean of each column’s TRUE/FALSE values is really the proportion of TRUE values.
 
 colMeans(is.na(df))      
 ```
@@ -129,20 +130,30 @@ Because data contain a lot of categorical attributes that are relevant to our go
 ```{r}
 
 target.encode <- function(train_df, test_df, target, col) {
+  # we convert the string into symbol
+  # it is same but is unqouted, can easily be handled by dplyr
   col_sym <- sym(col)
   encoded_col_name <- paste0(col, "_encoded")
 
   # Step 1: Calculate mean target per group (train set only)
+  # the !! (the “bang‐bang” operator) unquotes that symbol so that group_by() sees it
+  # exactly as if you’d written: group_by(Brand)
   avg_target <- train_df %>%
     group_by(!!col_sym) %>%
     summarise(mean_target = mean(.data[[target]], na.rm = TRUE), .groups = "drop") %>%
     arrange(mean_target)
 
   # Step 2: Assign ranks
+  # we'll do that by converting the mean_target first into factors, unique() keeps the
+  # original orders (otherwise it would go e)
   avg_target <- avg_target %>%
     mutate(!!encoded_col_name := as.numeric(factor(mean_target, levels = unique(mean_target))) - 1)
+  
 
   # Step 3: Join encoded column to both train and test
+  # Keeps all rows from train_df adds only selected columns
+  # if no match is found, NA is inserted instead
+   # still safer to use left join rather than inner join since mindlessly dropping data is dangerous
   train_df <- train_df %>%
     left_join(avg_target %>% select(!!col_sym, !!sym(encoded_col_name)), by = col)
 
@@ -155,6 +166,7 @@ target.encode <- function(train_df, test_df, target, col) {
   return(list(train = train_df, test = test_df))
 }
 
+
 ```
 
 ### Target Encoding
@@ -165,9 +177,14 @@ These are columns that need to be encoded. We simply apply the function defined 
 
 COLS_TO_ENCODE <- c('Brand', 'Model', 'Car_Suv', 'UsedOrNew', 'Transmission', 'DriveType', 'FuelType', 'ColourExtInt', 'Location', 'BodyType', 'Brand_Model')
 
+
 set.seed(123)
 
-
+# stratified sampling - the target distribution is maintained
+# example: c(3, 7, 1, 12, …)
+# train_index contains indices of rows that are picked evenly
+# df[train_index, ] creates a subset of rows which match the indices
+# df[-train_index, ] creates a subset of rows which don't match the indices
 train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
 train_data <- df[train_index, ]
 test_data  <- df[-train_index, ]
@@ -180,6 +197,7 @@ for (col in COLS_TO_ENCODE) {
 }
 
 # joining the datasets into one
+# works correctly if both datasets have exactly the same columns in the same order
 df <- rbind(train_data, test_data)
 df
 
@@ -193,6 +211,8 @@ Age is time-based feature and thus it introduces inflation. Is is therefore wise
 
 ```{r}
 
+# Sys.Date() returns actual date
+# format() extracts only years
 current_year <- as.numeric(format(Sys.Date(), "%Y"))
 df$age <- current_year - df$Year
 ```
@@ -221,6 +241,7 @@ df
 
 ```{r}
 
+# we extract only the litres, all values are in format: X L / 100 km
 df <- df %>%
   mutate(
     FuelConsumption_num = as.numeric(str_extract(FuelConsumption, "\\d+\\.?\\d*"))
@@ -265,7 +286,7 @@ show.correlation.plot <- function(df, target, col){
   
   p <- ggplot(df, aes(x = .data[[col]], y = .data[[target]])) +
     geom_point(alpha = 0.5, color = "steelblue") +
-    geom_smooth(method = "lm", color = "red") +  # Linear trend line
+    geom_smooth(method = "lm", color = "red", formula = y ~ x) +  # Linear trend line
     labs(title = paste0(target, " vs. ", col), x = col, y = target) +
     theme_minimal()
   
@@ -328,6 +349,8 @@ We also need to visualize the proportion of outliers present in our data. To ach
 
 show.boxplot <- function(data, cols, target, bins = 5) {
   # binning the data
+  # cut() takes a numeric vector (your continuous target variable) and splits it into intervals or bins.
+  # include.lowest = TRUE: Ensures that the lowest value of the variable is included in the first interval.
   data <- data %>%
     mutate(target_binned = cut(.data[[target]], breaks = bins, include.lowest = TRUE))
 
@@ -337,7 +360,7 @@ show.boxplot <- function(data, cols, target, bins = 5) {
       geom_boxplot(aes(group = target_binned)) +
       labs(x = paste0(target, " (binned)"), y = .x) +
       theme_minimal() +
-      # we wrap long bin labels by adding newline
+      # we wrap long bin labels by adding newline to improve readibility
       scale_x_discrete(labels = function(x) gsub(",", "\n", x))
   )
 
