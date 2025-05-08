@@ -29,10 +29,24 @@ ui <- fluidPage(
       actionButton("run", "Run Analysis")
     ),
     
+    # mainPanel(
+    #   plotOutput("plots"),
+    #   verbatimTextOutput("model_summary"),
+    #   tableOutput("coef_table")    # <-- add this
+
+    # )
+
     mainPanel(
       plotOutput("plots"),
+  fluidRow(
+    column(width = 7,
       verbatimTextOutput("model_summary")
+    ),
+    column(width = 5,
+      tableOutput("coef_table")
     )
+  )
+)
   )
 )
 
@@ -105,10 +119,10 @@ analysis <- eventReactive(input$run, {
     print(summary(lm_model$finalModel))
 
     vif_values <- car::vif(lm_model$finalModel)
-    vif_text <- paste(
-      "VIF (Variance Inflation Factor):\n",
-      paste0("  ", names(vif_values), ": ", round(vif_values, 2), collapse = "\n")
-    )
+    # vif_text <- paste(
+    #   "VIF (Variance Inflation Factor):\n",
+    #   paste0("  ", names(vif_values), ": ", round(vif_values, 2), collapse = "\n")
+    # )
 
     
                               # Predict on the test data
@@ -255,14 +269,39 @@ analysis <- eventReactive(input$run, {
 "  This translates to roughly a multiplicative factor of 10^RSE:\n",
 "    Overestimation up to ~", round((10^rse_test - 1) * 100, 1), "%\n",
 "    Underestimation up to ~", round((1 - 10^(-rse_test)) * 100, 1), "%\n",
-"\n\n",
-    vif_text
+"\n\n"
     )
+
+    # 1) extract the raw coefficients matrix
+  coef_mat <- summary(lm_model$finalModel)$coefficients
+  #    this is a matrix with columns: Estimate, Std. Error, t value, Pr(>|t|)
+  
+  # 2) turn it into a data.frame for easy rendering
+  coef_df <- as.data.frame(coef_mat, stringsAsFactors = FALSE)
+  #    optionally move rownames into a column
+  coef_df$Term <- rownames(coef_df)
+  rownames(coef_df) <- NULL
+  #    reorder so Term is first
+  # coef_df <- coef_df[c("Term", "Estimate", "Std. Error", "t value")]
+
+  vif_df <- data.frame(
+    Term = names(vif_values),
+    VIF  = as.numeric(vif_values),
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+
+  # 4) left-join the two tables by Term
+  coef_df <- dplyr::left_join(coef_df, vif_df, by = "Term")
+
+  # 5) (optional) reorder columns
+  coef_df <- coef_df[c("Term", "Estimate", "Std. Error", "t value", "VIF")]
 
     # Return list of outputs (plots and model summary)
     list(
         layout = (log_scale_plot / original_scale_plot) | (residuals_plot / (homoscedasticity_plot | qqplot)),  # Combine the plots
-        summary = summary_text  # Return model summary
+        summary = summary_text,  # Return model summary
+        coefs = coef_df
     )}
     else if (input$model == "poly") {
       
@@ -317,10 +356,10 @@ analysis <- eventReactive(input$run, {
       print(summary(poly_model$finalModel))
       
       vif_values <- car::vif(poly_model$finalModel)
-      vif_text <- paste(
-        "VIF (Variance Inflation Factor):\n",
-        paste0("  ", names(vif_values), ": ", round(vif_values, 2), collapse = "\n")
-      )
+      # vif_text <- paste(
+      #   "VIF (Variance Inflation Factor):\n",
+      #   paste0("  ", names(vif_values), ": ", round(vif_values, 2), collapse = "\n")
+      # )
       
       
       # Predict on the test data
@@ -467,14 +506,38 @@ analysis <- eventReactive(input$run, {
         "  This translates to roughly a multiplicative factor of 10^RSE:\n",
         "    Overestimation up to ~", round((10^rse_test - 1) * 100, 1), "%\n",
         "    Underestimation up to ~", round((1 - 10^(-rse_test)) * 100, 1), "%\n",
-        "\n\n",
-        vif_text
+        "\n\n"
       )
+
+        coef_mat <- summary(poly_model$finalModel)$coefficients
+  #    this is a matrix with columns: Estimate, Std. Error, t value, Pr(>|t|)
+  
+  # 2) turn it into a data.frame for easy rendering
+  coef_df <- as.data.frame(coef_mat, stringsAsFactors = FALSE)
+  #    optionally move rownames into a column
+  coef_df$Term <- rownames(coef_df)
+  rownames(coef_df) <- NULL
+  #    reorder so Term is first
+  # coef_df <- coef_df[c("Term", "Estimate", "Std. Error", "t value")]
+
+  vif_df <- data.frame(
+    Term = names(vif_values),
+    VIF  = as.numeric(vif_values),
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+
+  # 4) left-join the two tables by Term
+  coef_df <- dplyr::left_join(coef_df, vif_df, by = "Term")
+
+  # 5) (optional) reorder columns
+  coef_df <- coef_df[c("Term", "Estimate", "Std. Error", "t value", "VIF")]
       
       # Return list of outputs (plots and model summary)
       list(
         layout = (log_scale_plot / original_scale_plot) | (residuals_plot / (homoscedasticity_plot | qqplot)),  # Combine the plots
-        summary = summary_text  # Return model summary
+        summary = summary_text,  # Return model summary
+        coefs = coef_df
       )
     }
     })
@@ -490,6 +553,13 @@ analysis <- eventReactive(input$run, {
     req(analysis())
     analysis()$summary
   })
+
+  # render the table of coefficients
+output$coef_table <- renderTable({
+  req(analysis())
+  analysis()$coefs
+}, digits = c(NA, 5, 5, 3, 4),  # control number formatting if you like
+   striped = TRUE, hover = TRUE, bordered = TRUE)
 }
 
 shinyApp(ui = ui, server = server)
